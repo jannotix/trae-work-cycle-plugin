@@ -376,7 +376,11 @@ fn quick_cycle_delivers_tested_software_end_to_end() {
                "original_request": "certify the quick delivery path",
                "project_key": "cert-quick"}),
     );
-    assert_eq!(started["mode"], "quick");
+    assert_eq!(
+        started["mode"],
+        json!("quick"),
+        "cycle_start response: {started}"
+    );
     let workflow_id = started["workflowId"].as_str().unwrap().to_owned();
     let request_digest = started["requestDigest"].as_str().unwrap().to_owned();
 
@@ -827,6 +831,14 @@ fn concurrent_projects_share_one_control_plane() {
         "cycle_start",
         json!({"mode": "quick", "original_request": "hold project b",
                "project_key": "cert-multi-b"}),
+    );
+    assert!(
+        started_a["workflowId"].is_string(),
+        "cycle_start a response: {started_a}"
+    );
+    assert!(
+        started_b["workflowId"].is_string(),
+        "cycle_start b response: {started_b}"
     );
     let workflow_a = started_a["workflowId"].as_str().unwrap().to_owned();
     let workflow_b = started_b["workflowId"].as_str().unwrap().to_owned();
