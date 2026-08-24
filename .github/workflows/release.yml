@@ -1,0 +1,115 @@
+name: Release
+
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: write
+  id-token: write
+  attestations: write
+  actions: read
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  binaries:
+    name: Build ${{ matrix.name }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            name: windows-x64
+            binary: trae-cycle.exe
+          - os: ubuntu-latest
+            name: linux-x64
+            binary: trae-cycle
+    runs-on: ${{ matrix.os }}
+    defaults:
+      run:
+        working-directory: production
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: production
+      - name: Build release binary
+        run: cargo build --release --workspace
+      - name: Smoke test
+        shell: pwsh
+        run: |
+          $binary = Join-Path 'target' 'release' '${{ matrix.binary }}'
+          $probe = New-TemporaryFile
+          $out = New-TemporaryFile
+          $err = New-TemporaryFile
+          $request = '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-06-18","capabilities":{},"clientInfo":{"name":"ci","version":"1.0.0"}}}'
+          [System.IO.File]::WriteAllText($probe, $request + "`n")
+          $arguments = 'mcp --data-dir "{0}"' -f (Join-Path $env:RUNNER_TEMP 'cycle-data')
+          $process = Start-Process -FilePath $binary -ArgumentList $arguments -RedirectStandardInput $probe -RedirectStandardOutput $out -RedirectStandardError $err -WindowStyle Hidden -PassThru
+          if (-not $process.WaitForExit(60000)) { $process.Kill(); throw 'smoke test timed out' }
+          if ($process.ExitCode -ne 0) { Get-Content $err; throw "smoke test exited with $($process.ExitCode)" }
+          $response = (Get-Content $out -Raw | ConvertFrom-Json)
+          if ($response.result.serverInfo.name -ne 'trae-cycle') { throw 'unexpected server identity' }
+          Write-Host "smoke ok: $($response.result.serverInfo.name) $($response.result.serverInfo.version)"
+      - name: Stage archive
+        shell: pwsh
+        run: |
+          $stage = Join-Path $env:RUNNER_TEMP 'stage'
+          New-Item -ItemType Directory -Path $stage | Out-Null
+          Copy-Item (Join-Path 'target' 'release' '${{ matrix.binary }}') $stage
+          $zip = Join-Path $env:RUNNER_TEMP "trae-cycle-${{ matrix.name }}.zip"
+          Compress-Archive -Path (Join-Path $stage '*') -DestinationPath $zip
+          Copy-Item $zip "${{ github.workspace }}/trae-cycle-${{ matrix.name }}.zip"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: trae-cycle-${{ matrix.name }}
+          path: ${{ github.workspace }}/trae-cycle-${{ matrix.name }}.zip
+          if-no-files-found: error
+
+  package:
+    name: Package, attest, publish
+    needs: binaries
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: actions/download-artifact@v4
+        with:
+          path: ${{ github.workspace }}/artifacts
+          merge-multiple: true
+      - name: Package with allowlist
+        shell: pwsh
+        run: |
+          $assets = @(
+            "${{ github.workspace }}/artifacts/trae-cycle-windows-x64.zip",
+            "${{ github.workspace }}/artifacts/trae-cycle-linux-x64.zip"
+          )
+          ./tools/package.ps1 -Assets $assets
+      - name: Verify provenance (manifest revision equals source revision)
+        shell: pwsh
+        run: ./tools/package.ps1 -Verify ./dist
+      - uses: actions/attest-build-provenance@v2
+        with:
+          subject-path: |
+            dist/*.zip
+            dist/SBOM.cdx.json
+            dist/THIRD-PARTY-NOTICES.md
+      - name: Verify attestations
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh attestation verify dist/trae-cycle-plugin-*.zip --repo "${{ github.repository }}"
+          gh attestation verify dist/trae-cycle-windows-x64.zip --repo "${{ github.repository }}"
+      - name: Create release
+        uses: softprops/action-gh-release@v2
+        with:
+          generate-release-notes: true
+          files: |
+            dist/*.zip
+            dist/SBOM.cdx.json
+            dist/THIRD-PARTY-NOTICES.md
+            dist/SHA256SUMS.txt
+            dist/MANIFEST.json

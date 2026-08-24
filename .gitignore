@@ -1,0 +1,29 @@
+# Rust
+production/target/
+
+# Packaging output
+dist/
+
+# Runtime state
+*.db-shm
+*.db-wal
+*.log
+
+# Local machine configuration (not published)
+plugin/install/mcp.local.json
+.env
+.env.*
+!.env.example
+
+# Secrets and signing material
+*.key
+*.pem
+*.p12
+*.pfx
+
+# Editors and operating systems
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db
+Desktop.ini

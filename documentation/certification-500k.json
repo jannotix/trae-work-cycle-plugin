@@ -1,0 +1,51 @@
+{
+  "corpus": {
+    "deterministicSeed": 20260812,
+    "ignoredFiles": 20000,
+    "inventoriedFiles": 500101,
+    "parsedFiles": 500100,
+    "physicalFiles": 520101,
+    "sourceFiles": 500100
+  },
+  "graph": {
+    "contextBytes": 32521,
+    "contextItems": 112,
+    "edges": 1696005,
+    "nodes": 2174361,
+    "oracleRouteFound": true,
+    "parseErrors": 0,
+    "partitions": 501,
+    "queryNodes": 6
+  },
+  "hardware": {
+    "cpu": "AMD Ryzen 5 3400G with Radeon Vega Graphics    ",
+    "logicalCpus": 8,
+    "operatingSystem": "Windows 11 Pro",
+    "totalMemoryBytes": 14951211008
+  },
+  "incremental": {
+    "deletedRemoved": true,
+    "modifiedFound": true,
+    "partitionGeneration": 2,
+    "renamedFound": true
+  },
+  "passed": false,
+  "resources": {
+    "availableDiskBytesAfter": 363318517760,
+    "generatedBytes": 27817942,
+    "peakCpuPercent": 24.752476,
+    "peakMemoryBytes": 322957312,
+    "peakMemoryPercent": 2.160074604172157
+  },
+  "schemaVersion": 1,
+  "timingsMs": {
+    "generation": 549872,
+    "hashing": 2765992,
+    "incremental": 34904,
+    "inventoryAndIndex": 3130343,
+    "parsing": 170141,
+    "persistence": 3038297,
+    "query": 131,
+    "total": 3723366
+  }
+}
