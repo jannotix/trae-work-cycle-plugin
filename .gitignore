@@ -1,6 +1,9 @@
 # Rust
 production/target/
 
+# Local tool session state
+.mimosa/
+
 # Packaging output
 dist/
 
