@@ -1,0 +1,40 @@
+{
+  "name": "trae-cycle",
+  "displayName": "Cycle for Trae Work",
+  "version": "1.0.0",
+  "description": "Evidence-gated software delivery: five isolated roles, blind reviews, arbiter approval and exact-byte delivery through a local MCP control plane.",
+  "author": {
+    "name": "Gianluca Iannotta",
+    "url": "https://github.com/jannotix"
+  },
+  "repository": "https://github.com/jannotix/trae-work-cycle-plugin",
+  "homepage": "https://github.com/jannotix/trae-work-cycle-plugin",
+  "license": "FSL-1.1-MIT",
+  "keywords": [
+    "delivery",
+    "code-review",
+    "arbitration",
+    "governance",
+    "git",
+    "mcp",
+    "local"
+  ],
+  "type": "local",
+  "platforms": ["windows-x64", "linux-x64"],
+  "components": {
+    "mcp": {
+      "command": "%LOCALAPPDATA%\\Trae Cycle\\bin\\trae-cycle.exe",
+      "args": ["mcp", "--data-dir", "%LOCALAPPDATA%\\Trae Cycle"],
+      "env": {
+        "START_MCP_TIMEOUT_MS": "30000",
+        "RUN_MCP_TIMEOUT_MS": "30000"
+      }
+    },
+    "skill": "cycle-delivery",
+    "command": "cycle"
+  },
+  "releaseAssets": {
+    "windows-x64": "trae-cycle-windows-x64.zip",
+    "linux-x64": "trae-cycle-linux-x64.zip"
+  }
+}
