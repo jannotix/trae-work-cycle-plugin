@@ -1,6 +1,6 @@
 # Cycle for Trae Work Design Specification
 
-Status: Draft awaiting owner approval (Phase 0 gate)
+Status: Implemented — released as 1.0.0 (all phases through §27 complete; exceptions recorded in CERTIFICATION.md)
 Licensor & Author: Gianluca Iannotta
 License: FSL-1.1-MIT (MIT conversion after two years)
 Repository: https://github.com/jannotix/trae-work-cycle-plugin
