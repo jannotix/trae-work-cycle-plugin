@@ -42,16 +42,28 @@ jobs:
         shell: pwsh
         run: |
           $binary = Join-Path 'target' 'release' '${{ matrix.binary }}'
-          $probe = New-TemporaryFile
-          $out = New-TemporaryFile
-          $err = New-TemporaryFile
+          $probe = Join-Path $env:RUNNER_TEMP 'probe.jsonl'
           $request = '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-06-18","capabilities":{},"clientInfo":{"name":"ci","version":"1.0.0"}}}'
           [System.IO.File]::WriteAllText($probe, $request + "`n")
-          $arguments = 'mcp --data-dir "{0}"' -f (Join-Path $env:RUNNER_TEMP 'cycle-data')
-          $process = Start-Process -FilePath $binary -ArgumentList $arguments -RedirectStandardInput $probe -RedirectStandardOutput $out -RedirectStandardError $err -WindowStyle Hidden -PassThru
+          $startInfo = [System.Diagnostics.ProcessStartInfo]::new()
+          $startInfo.FileName = (Resolve-Path $binary).Path
+          foreach ($argument in @('mcp', '--data-dir', (Join-Path $env:RUNNER_TEMP 'cycle-data'))) {
+            [void] $startInfo.ArgumentList.Add($argument)
+          }
+          $startInfo.RedirectStandardInput = $true
+          $startInfo.RedirectStandardOutput = $true
+          $startInfo.RedirectStandardError = $true
+          $startInfo.UseShellExecute = $false
+          $process = [System.Diagnostics.Process]::new()
+          $process.StartInfo = $startInfo
+          [void] $process.Start()
+          $outputTask = $process.StandardOutput.ReadToEndAsync()
+          $errorTask = $process.StandardError.ReadToEndAsync()
+          $process.StandardInput.Write([System.IO.File]::ReadAllText($probe))
+          $process.StandardInput.Close()
           if (-not $process.WaitForExit(60000)) { $process.Kill(); throw 'smoke test timed out' }
-          if ($process.ExitCode -ne 0) { Get-Content $err; throw "smoke test exited with $($process.ExitCode)" }
-          $response = (Get-Content $out -Raw | ConvertFrom-Json)
+          if ($process.ExitCode -ne 0) { throw "smoke failed: $($errorTask.Result)" }
+          $response = $outputTask.Result | ConvertFrom-Json
           if ($response.result.serverInfo.name -ne 'trae-cycle') { throw 'unexpected server identity' }
           Write-Host "smoke ok: $($response.result.serverInfo.name) $($response.result.serverInfo.version)"
       - name: Stage archive
