@@ -1,5 +1,9 @@
 # Cycle for Trae Work
 
+<p align="center">
+  <img src="marketplace/logo.svg" width="160" alt="Cycle logo">
+</p>
+
 Cycle for Trae Work is a native Trae Work integration for evidence-gated software delivery. It coordinates five isolated roles without replacing Trae Work planning, browsing or review capabilities.
 
 ## What it is

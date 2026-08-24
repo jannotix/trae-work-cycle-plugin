@@ -31,6 +31,7 @@ $PluginAllowlist = @(
     'README.md',
     'LICENSE',
     'NOTICE',
+    'marketplace/logo.svg',
     'plugin/command/cycle.md',
     'plugin/install/mcp.example.json'
 ) + $SkillAllowlist
