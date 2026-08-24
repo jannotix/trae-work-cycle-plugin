@@ -13,7 +13,7 @@ Distribution assets for Cycle for Trae Work. There is no public submission chann
 
 ## Executed submissions
 
-- `trae-community/trae-skills`: pull request adding the `cycle-delivery` skill (this repository's `plugin/skill/cycle-delivery` plus an Installation section), with the catalog updated in both READMEs. See the PR linked in the repository history.
+- `trae-community/trae-skills`: [pull request #24](https://github.com/trae-community/trae-skills/pull/24) adds the `cycle-delivery` skill (this repository's `plugin/skill/cycle-delivery` plus an Installation section), with the catalog updated in both READMEs. Track review feedback there.
 
 ## Manual channels (need your account)
 
