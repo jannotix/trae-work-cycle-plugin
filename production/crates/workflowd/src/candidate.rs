@@ -1231,6 +1231,15 @@ fn git_apply_check(repository: &Path, exact_diff: &[u8]) -> Result<(), Candidate
     }
 }
 
+fn field_pairs(fields: &[String]) -> impl Iterator<Item = (&str, &str)> {
+    let pair_count = fields.len() / 2;
+    (0..pair_count).map(move |index| {
+        let status = fields[index * 2].as_str();
+        let path = fields[index * 2 + 1].as_str();
+        (status, path)
+    })
+}
+
 fn candidate_files(
     repository: &Path,
     encoded: &[u8],
@@ -1244,9 +1253,9 @@ fn candidate_files(
     }
     let mut payload_bytes = exact_diff_bytes;
     let mut tree_entries = BTreeMap::new();
-    for pair in fields.chunks_exact(2) {
-        if pair[0] != "D" {
-            let entry = git_tree_entry(repository, &pair[1])?;
+    for (status, path) in field_pairs(&fields) {
+        if status != "D" {
+            let entry = git_tree_entry(repository, path)?;
             let size = output_text(&git(repository, ["cat-file", "-s", &entry.1])?)?
                 .parse::<u64>()
                 .map_err(|_| CandidateFreezeError::PayloadMismatch)?;
@@ -1258,15 +1267,15 @@ fn candidate_files(
             if payload_bytes > MAX_CANDIDATE_PAYLOAD_BYTES {
                 return Err(CandidateFreezeError::PayloadTooLarge);
             }
-            tree_entries.insert(pair[1].clone(), entry);
+            tree_entries.insert(path.to_owned(), entry);
         }
     }
     let mut files = Vec::with_capacity(fields.len() / 2);
     let mut exact_files = Vec::with_capacity(fields.len() / 2);
     let mut remaining = MAX_CANDIDATE_PAYLOAD_BYTES - exact_diff_bytes;
-    for pair in fields.chunks_exact(2) {
-        let kind = match pair[0].as_str() {
-            "A" if generated_path(&pair[1]) => CandidateFileKind::Generated,
+    for (status, path) in field_pairs(&fields) {
+        let kind = match status {
+            "A" if generated_path(path) => CandidateFileKind::Generated,
             "A" => CandidateFileKind::Added,
             "D" => CandidateFileKind::Deleted,
             _ => CandidateFileKind::Modified,
@@ -1275,7 +1284,7 @@ fn candidate_files(
             (None, false)
         } else {
             let (executable, object_id) = tree_entries
-                .get(&pair[1])
+                .get(path)
                 .ok_or(CandidateFreezeError::PayloadMismatch)?;
             let content = git_stdout_bounded(
                 repository,
@@ -1288,13 +1297,13 @@ fn candidate_files(
             let digest = ContentDigest::of(&content);
             let executable = *executable;
             exact_files.push(CandidateFilePayload::with_executable(
-                pair[1].clone(),
+                path.to_owned(),
                 content,
                 executable,
             ));
             (Some(digest), executable)
         };
-        files.push(CandidateFile::new(pair[1].clone(), digest, kind)?.with_executable(executable));
+        files.push(CandidateFile::new(path.to_owned(), digest, kind)?.with_executable(executable));
     }
     exact_files.sort_unstable_by(|left, right| left.path().cmp(right.path()));
     Ok((files, exact_files))
