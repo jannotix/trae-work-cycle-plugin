@@ -184,7 +184,7 @@ the product license, third-party notices, README, and its platform executable.
 | T00 | Completed — `78a0de3` |
 | T01 | Implemented — `9e65034`; Windows extracted-archive smoke passed, WSL runner receipt pending |
 | T02 | Implemented — `67890d4`; policy, expiring single-use ledgered consent, runner boundary and MCP quick/full/repair/concurrency certification passed on Windows, WSL receipt pending |
-| T03 | Implemented locally — pinned/locked quality and security gates, exact context, deterministic package, full inventory, secret scan, attest-all, approval-protected publish; remote release-candidate receipt pending |
+| T03 | Implemented — `a9a8726` plus release-branch CI trigger follow-up; pinned/locked quality and security gates, exact context, deterministic package, full inventory, secret scan, attest-all, approval-protected publish; remote release-candidate receipt pending |
 | T04–T09 | Not started |
 
 The existence of v1.0.0, a green unit suite, or a corrected plan does not change
