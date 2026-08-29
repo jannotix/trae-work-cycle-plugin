@@ -36,6 +36,9 @@ jobs:
         run: cargo clippy --workspace --all-targets --all-features -- -D warnings
       - name: Tests
         run: cargo test --workspace --all-features
+      - name: Package contract
+        shell: pwsh
+        run: ../tools/test-package-contract.ps1
 
   license-gate:
     name: license gate

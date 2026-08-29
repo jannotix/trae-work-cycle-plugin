@@ -20,7 +20,7 @@ Evidence-gated software delivery for TRAE Work: five isolated roles, blind revie
 
 ## Why it fits the marketplace model
 
-- **Local-first**: one native binary per platform (Windows x64, Linux x64), no cloud service, no account, no telemetry; complements the OAuth-style SaaS integrations already listed;
+- **Local-first**: certified Windows x64 and WSL2 x64 native runtimes, with macOS declared **compatible but untested**; no Cycle cloud service, account or telemetry;
 - **Standard surfaces only**: MCP server (stdio, protocol 2025-06-18, 36 tools), one skill (`cycle-delivery`), one command (`cycle`) — exactly the three extension points TRAE Work already supports;
 - **Distribution-ready**: GitHub releases with SHA256SUMS, CycloneDX SBOM, provenance manifest and signed build attestations; the listing manifest draft is in this repository (`marketplace/manifest.json`).
 

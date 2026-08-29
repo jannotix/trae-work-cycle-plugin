@@ -1,7 +1,7 @@
 {
   "mcpServers": {
     "trae-cycle": {
-      "command": "C:\\Program Files\\Trae Cycle\\trae-cycle.exe",
+      "command": "C:\\Users\\YOU\\AppData\\Local\\TraeCycle\\bin\\trae-cycle.exe",
       "args": ["mcp", "--data-dir", "C:\\Users\\YOU\\AppData\\Local\\Trae Cycle"],
       "env": {
         "START_MCP_TIMEOUT_MS": "30000",

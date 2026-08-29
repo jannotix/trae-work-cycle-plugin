@@ -86,11 +86,22 @@ function Get-Sha256([string] $Path) {
     (Get-FileHash -Path $Path -Algorithm SHA256).Hash.ToLowerInvariant()
 }
 
-function Copy-Allowlist([string[]] $Allowlist, [string] $SourceRoot, [string] $Stage) {
+function Copy-Allowlist(
+    [string[]] $Allowlist,
+    [string] $SourceRoot,
+    [string] $Stage,
+    [switch] $SkillAtRoot
+) {
     foreach ($relative in $Allowlist) {
         $source = Join-Path $SourceRoot ($relative -replace '/', [IO.Path]::DirectorySeparatorChar)
         if (-not (Test-Path $source)) { throw "allowlisted file missing: $relative" }
-        if ($relative.StartsWith('plugin/skill/')) {
+        if ($SkillAtRoot) {
+            $prefix = 'plugin/skill/cycle-delivery/'
+            if (-not $relative.StartsWith($prefix)) {
+                throw "skill archive entry is outside the cycle-delivery root: $relative"
+            }
+            $destination = Join-Path $Stage ($relative.Substring($prefix.Length) -replace '/', [IO.Path]::DirectorySeparatorChar)
+        } elseif ($relative.StartsWith('plugin/skill/')) {
             $destination = Join-Path $Stage ($relative.Substring('plugin/skill/'.Length) -replace '/', [IO.Path]::DirectorySeparatorChar)
         } elseif ($relative.StartsWith('plugin/')) {
             $destination = Join-Path $Stage ($relative.Substring('plugin/'.Length) -replace '/', [IO.Path]::DirectorySeparatorChar)
@@ -109,8 +120,17 @@ function New-ZipFromStage([string] $Stage, [string] $ZipPath) {
     [System.IO.Compression.ZipFile]::CreateFromDirectory($Stage, $ZipPath, [System.IO.Compression.CompressionLevel]::Optimal, $false)
 }
 
+function Assert-CleanRepository([string] $RepositoryRoot) {
+    $status = @(& git -C $RepositoryRoot status --porcelain=v1 --untracked-files=all)
+    if ($LASTEXITCODE -ne 0) { throw 'packaging requires a readable git repository' }
+    if ($status.Count -gt 0) {
+        $summary = ($status | Select-Object -First 20) -join '; '
+        throw "packaging requires an exact clean revision; dirty entries: $summary"
+    }
+}
+
 function Get-CargoMetadata([string] $ProductionRoot) {
-    $raw = & cargo metadata --format-version 1 --manifest-path (Join-Path $ProductionRoot 'Cargo.toml')
+    $raw = & cargo metadata --locked --format-version 1 --manifest-path (Join-Path $ProductionRoot 'Cargo.toml')
     if ($LASTEXITCODE -ne 0) { throw 'cargo metadata failed' }
     $raw | ConvertFrom-Json -AsHashtable
 }
@@ -224,6 +244,9 @@ function New-Manifest([object[]] $Artifacts, [string] $Version, [string] $Revisi
     $manifest | ConvertTo-Json -Depth 6 | Set-Content -Path $Path -Encoding utf8NoBOM
 }
 
+$Root = (Resolve-Path $Root).Path
+Assert-CleanRepository $Root
+
 if ($PSCmdlet.ParameterSetName -eq 'Verify') {
     $manifestPath = Join-Path $Verify 'MANIFEST.json'
     if (-not (Test-Path $manifestPath)) { throw "MANIFEST.json not found in $Verify" }
@@ -244,7 +267,6 @@ if ($PSCmdlet.ParameterSetName -eq 'Verify') {
     exit 0
 }
 
-$Root = (Resolve-Path $Root).Path
 $ProductionRoot = Join-Path $Root 'production'
 if (-not $Output) { $Output = Join-Path $Root 'dist' }
 $dist = (New-Item -ItemType Directory -Force -Path $Output).FullName
@@ -267,7 +289,7 @@ if (Test-Path $staging) { Remove-Item $staging -Recurse -Force }
 
 $skillStage = Join-Path $staging 'skill'
 New-Item -ItemType Directory -Path $skillStage | Out-Null
-Copy-Allowlist -Allowlist $SkillAllowlist -SourceRoot $Root -Stage $skillStage
+Copy-Allowlist -Allowlist $SkillAllowlist -SourceRoot $Root -Stage $skillStage -SkillAtRoot
 $skillZip = Join-Path $dist "cycle-delivery-skill-$version.zip"
 New-ZipFromStage $skillStage $skillZip
 

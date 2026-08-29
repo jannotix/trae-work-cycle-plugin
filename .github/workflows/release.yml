@@ -23,9 +23,11 @@ jobs:
           - os: windows-latest
             name: windows-x64
             binary: trae-cycle.exe
+            archive: trae-cycle-windows-x64.zip
           - os: ubuntu-latest
-            name: linux-x64
+            name: wsl-x64
             binary: trae-cycle
+            archive: trae-cycle-wsl-x64.tar.gz
     runs-on: ${{ matrix.os }}
     defaults:
       run:
@@ -37,48 +39,14 @@ jobs:
         with:
           workspaces: production
       - name: Build release binary
-        run: cargo build --release --workspace
-      - name: Smoke test
+        run: cargo build --release --workspace --locked
+      - name: Stage archive and smoke the extracted runtime
         shell: pwsh
-        run: |
-          $binary = Join-Path 'target' 'release' '${{ matrix.binary }}'
-          $probe = Join-Path $env:RUNNER_TEMP 'probe.jsonl'
-          $request = '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-06-18","capabilities":{},"clientInfo":{"name":"ci","version":"1.0.0"}}}'
-          [System.IO.File]::WriteAllText($probe, $request + "`n")
-          $startInfo = [System.Diagnostics.ProcessStartInfo]::new()
-          $startInfo.FileName = (Resolve-Path $binary).Path
-          foreach ($argument in @('mcp', '--data-dir', (Join-Path $env:RUNNER_TEMP 'cycle-data'))) {
-            [void] $startInfo.ArgumentList.Add($argument)
-          }
-          $startInfo.RedirectStandardInput = $true
-          $startInfo.RedirectStandardOutput = $true
-          $startInfo.RedirectStandardError = $true
-          $startInfo.UseShellExecute = $false
-          $process = [System.Diagnostics.Process]::new()
-          $process.StartInfo = $startInfo
-          [void] $process.Start()
-          $outputTask = $process.StandardOutput.ReadToEndAsync()
-          $errorTask = $process.StandardError.ReadToEndAsync()
-          $process.StandardInput.Write([System.IO.File]::ReadAllText($probe))
-          $process.StandardInput.Close()
-          if (-not $process.WaitForExit(60000)) { $process.Kill(); throw 'smoke test timed out' }
-          if ($process.ExitCode -ne 0) { throw "smoke failed: $($errorTask.Result)" }
-          $response = $outputTask.Result | ConvertFrom-Json
-          if ($response.result.serverInfo.name -ne 'trae-cycle') { throw 'unexpected server identity' }
-          Write-Host "smoke ok: $($response.result.serverInfo.name) $($response.result.serverInfo.version)"
-      - name: Stage archive
-        shell: pwsh
-        run: |
-          $stage = Join-Path $env:RUNNER_TEMP 'stage'
-          New-Item -ItemType Directory -Path $stage | Out-Null
-          Copy-Item (Join-Path 'target' 'release' '${{ matrix.binary }}') $stage
-          $zip = Join-Path $env:RUNNER_TEMP "trae-cycle-${{ matrix.name }}.zip"
-          Compress-Archive -Path (Join-Path $stage '*') -DestinationPath $zip
-          Copy-Item $zip "${{ github.workspace }}/trae-cycle-${{ matrix.name }}.zip"
+        run: ../tools/archive-runtime.ps1 -Binary "target/release/${{ matrix.binary }}" -Platform "${{ matrix.name }}" -Output "${{ github.workspace }}/${{ matrix.archive }}"
       - uses: actions/upload-artifact@v4
         with:
           name: trae-cycle-${{ matrix.name }}
-          path: ${{ github.workspace }}/trae-cycle-${{ matrix.name }}.zip
+          path: ${{ github.workspace }}/${{ matrix.archive }}
           if-no-files-found: error
 
   package:
@@ -90,16 +58,17 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
       - uses: actions/download-artifact@v4
         with:
-          path: ${{ github.workspace }}/artifacts
+          path: ${{ runner.temp }}/cycle-artifacts
           merge-multiple: true
       - name: Package with allowlist
         shell: pwsh
         run: |
           $assets = @(
-            "${{ github.workspace }}/artifacts/trae-cycle-windows-x64.zip",
-            "${{ github.workspace }}/artifacts/trae-cycle-linux-x64.zip"
+            "${{ runner.temp }}/cycle-artifacts/trae-cycle-windows-x64.zip",
+            "${{ runner.temp }}/cycle-artifacts/trae-cycle-wsl-x64.tar.gz"
           )
           ./tools/package.ps1 -Assets $assets
+          ./tools/test-package-contract.ps1 -Dist ./dist
       - name: Verify provenance (manifest revision equals source revision)
         shell: pwsh
         run: ./tools/package.ps1 -Verify ./dist
@@ -107,6 +76,7 @@ jobs:
         with:
           subject-path: |
             dist/*.zip
+            dist/*.tar.gz
             dist/SBOM.cdx.json
             dist/THIRD-PARTY-NOTICES.md
       - name: Verify attestations
@@ -121,6 +91,7 @@ jobs:
           generate-release-notes: true
           files: |
             dist/*.zip
+            dist/*.tar.gz
             dist/SBOM.cdx.json
             dist/THIRD-PARTY-NOTICES.md
             dist/SHA256SUMS.txt

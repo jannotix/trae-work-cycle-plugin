@@ -20,10 +20,13 @@
     "local"
   ],
   "type": "local",
-  "platforms": ["windows-x64", "linux-x64"],
+  "platforms": ["windows-x64", "wsl-x64"],
+  "compatibility": {
+    "macos": "compatible but untested"
+  },
   "components": {
     "mcp": {
-      "command": "%LOCALAPPDATA%\\Trae Cycle\\bin\\trae-cycle.exe",
+      "command": "%LOCALAPPDATA%\\TraeCycle\\bin\\trae-cycle.exe",
       "args": ["mcp", "--data-dir", "%LOCALAPPDATA%\\Trae Cycle"],
       "env": {
         "START_MCP_TIMEOUT_MS": "30000",
@@ -35,6 +38,6 @@
   },
   "releaseAssets": {
     "windows-x64": "trae-cycle-windows-x64.zip",
-    "linux-x64": "trae-cycle-linux-x64.zip"
+    "wsl-x64": "trae-cycle-wsl-x64.tar.gz"
   }
 }

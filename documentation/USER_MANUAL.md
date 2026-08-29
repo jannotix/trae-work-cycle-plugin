@@ -4,7 +4,7 @@ Version 1.0.0. Everything in this manual runs locally; no account, cloud service
 
 ## 1. Requirements
 
-- Trae Work desktop with a local environment (Windows x64 or Linux x64).
+- Trae Work Desktop on Windows 10/11 x64, or WSL2 Ubuntu x64 for the CLI/MCP runtime lane.
 - The `trae-cycle` binary from the release archive for your platform.
 - Git available on `PATH` (worktrees and delivery use the project's real Git repository).
 - Four model endpoints for the read-only roles (any OpenAI-compatible server: a cloud provider or a local runtime such as Ollama or LM Studio).
@@ -13,12 +13,14 @@ The executor role is the model you already selected in Trae Work. Cycle never ch
 
 ## 2. Installation
 
-1. Unpack the release archive and place `trae-cycle` in a permanent location, for example `%LOCALAPPDATA%\Trae Cycle\bin\` (Windows) or `~/.local/share/trae-cycle/bin/` (Linux).
+1. Unpack the release archive and place the executable in a permanent location. The Windows MCP `command` path must not contain spaces; use `%LOCALAPPDATA%\TraeCycle\bin\trae-cycle.exe`. In WSL use `~/.local/share/trae-cycle/bin/trae-cycle` and retain mode `0755`.
 2. In Trae Work settings, add an MCP server (local environment) with the contents of `plugin/install/mcp.example.json`, replacing the command path with your binary location and the data directory if you do not want the default.
-3. Unpack the `cycle-delivery` skill archive into the global skills directory (`%USERPROFILE%\.trae-cn\skills\` on Windows).
+3. Upload `cycle-delivery-skill-<version>.zip` in Trae Work's Skills marketplace. Its `SKILL.md` is at the archive root. A manual alternative is to unpack it under `%USERPROFILE%\.trae-cn\skills\cycle-delivery\`.
 4. Create the `cycle` command in Trae Work settings from `plugin/command/cycle.md`.
 5. Configure the role models (next section).
 6. Run `/cycle setup`, then `/cycle doctor`. Both must report a healthy installation before the first cycle.
+
+The certified v1 lanes are Windows x64 and WSL2 Ubuntu x64. macOS is **compatible but untested**; no macOS result substitutes for either required lane.
 
 ## 3. Model configuration
 

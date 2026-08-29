@@ -181,8 +181,9 @@ the product license, third-party notices, README, and its platform executable.
 
 | Task | State |
 | --- | --- |
-| T00 | Completed — pending commit receipt |
-| T01–T09 | Not started |
+| T00 | Completed — `78a0de3` |
+| T01 | Implemented locally — Windows extracted-archive smoke passed; WSL runner receipt pending |
+| T02–T09 | Not started |
 
 The existence of v1.0.0, a green unit suite, or a corrected plan does not change
 this release from `BLOCKED`.
