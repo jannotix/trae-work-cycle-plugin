@@ -186,7 +186,8 @@ the product license, third-party notices, README, and its platform executable.
 | T02 | Implemented — `67890d4`; policy, expiring single-use ledgered consent, runner boundary and MCP quick/full/repair/concurrency certification passed on Windows, WSL receipt pending |
 | T03 | Implemented — `a9a8726` plus release-branch CI trigger follow-up; pinned/locked quality and security gates, exact context, deterministic package, full inventory, secret scan, attest-all, approval-protected publish; remote release-candidate receipt pending |
 | T04 | Passed on `c9ff3ef`: raw receipt `passed: true`, total 1,418,402 ms, 0 parse errors; final sealed-SHA rerun remains mandatory |
-| T05–T09 | Not started |
+| T05 | In progress — Trae Work Desktop 0.1.54 pinned; deterministic localhost role endpoint ready; isolated install and UI matrix pending |
+| T06–T09 | Not started |
 
 The existence of v1.0.0, a green unit suite, or a corrected plan does not change
 this release from `BLOCKED`.
