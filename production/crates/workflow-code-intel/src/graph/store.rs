@@ -1,6 +1,9 @@
 use std::{path::Path, time::Duration};
 
-use rusqlite::{Connection, OptionalExtension, Transaction, TransactionBehavior, params};
+use rusqlite::{
+    Connection, OptionalExtension, Transaction, TransactionBehavior, params, params_from_iter,
+    types::Value,
+};
 use workflow_core::{ProjectId, WorkflowTimestamp};
 
 use crate::{
@@ -13,9 +16,24 @@ pub struct GraphStore {
 }
 
 pub struct PartitionBatch<'connection> {
+    rebuild_secondary_indexes: bool,
     timestamp: WorkflowTimestamp,
     transaction: Transaction<'connection>,
 }
+
+const DROP_SECONDARY_INDEXES: &str = "
+    DROP INDEX code_nodes_id;
+    DROP INDEX code_edges_source;
+    DROP INDEX code_edges_target;
+";
+const CREATE_SECONDARY_INDEXES: &str = "
+    CREATE INDEX code_nodes_id ON code_nodes(id, partition_id, generation);
+    CREATE INDEX code_edges_source ON code_edges(source_id, partition_id, generation);
+    CREATE INDEX code_edges_target ON code_edges(target_id, partition_id, generation);
+";
+const INSERT_BATCH_ROWS: usize = 128;
+const GRAPH_CACHE_KIB: i64 = -262_144;
+const _: () = assert!(INSERT_BATCH_ROWS * 6 < 999);
 
 #[derive(Debug)]
 pub enum GraphStoreError {
@@ -68,7 +86,7 @@ impl GraphStore {
         let connection = Connection::open(path)?;
         connection.pragma_update(None, "foreign_keys", "ON")?;
         connection.pragma_update(None, "trusted_schema", "OFF")?;
-        connection.pragma_update(None, "cache_size", -65_536_i64)?;
+        connection.pragma_update(None, "cache_size", GRAPH_CACHE_KIB)?;
         connection.pragma_update(None, "temp_store", "MEMORY")?;
         connection.busy_timeout(Duration::from_secs(5))?;
         let version: u32 = connection.pragma_query_value(None, "user_version", |row| row.get(0))?;
@@ -91,11 +109,31 @@ impl GraphStore {
         &mut self,
         timestamp: WorkflowTimestamp,
     ) -> Result<PartitionBatch<'_>, GraphStoreError> {
+        self.start_partition_batch(timestamp, false)
+    }
+
+    pub fn bulk_partition_batch(
+        &mut self,
+        timestamp: WorkflowTimestamp,
+    ) -> Result<PartitionBatch<'_>, GraphStoreError> {
+        self.start_partition_batch(timestamp, true)
+    }
+
+    fn start_partition_batch(
+        &mut self,
+        timestamp: WorkflowTimestamp,
+        rebuild_secondary_indexes: bool,
+    ) -> Result<PartitionBatch<'_>, GraphStoreError> {
+        let transaction = self
+            .connection
+            .transaction_with_behavior(TransactionBehavior::Immediate)?;
+        if rebuild_secondary_indexes {
+            transaction.execute_batch(DROP_SECONDARY_INDEXES)?;
+        }
         Ok(PartitionBatch {
+            rebuild_secondary_indexes,
             timestamp,
-            transaction: self
-                .connection
-                .transaction_with_behavior(TransactionBehavior::Immediate)?,
+            transaction,
         })
     }
 
@@ -335,6 +373,9 @@ impl PartitionBatch<'_> {
     }
 
     pub fn commit(self) -> Result<(), GraphStoreError> {
+        if self.rebuild_secondary_indexes {
+            self.transaction.execute_batch(CREATE_SECONDARY_INDEXES)?;
+        }
         self.transaction.commit().map_err(GraphStoreError::Sqlite)
     }
 }
@@ -369,37 +410,8 @@ fn replace_partition_in_transaction(
             timestamp.to_string(),
         ],
     )?;
-    {
-        let mut statement = transaction.prepare(
-            "INSERT INTO code_nodes(partition_id, generation, id, node_json)
-             VALUES (?1, ?2, ?3, ?4)",
-        )?;
-        for node in partition.nodes.values() {
-            statement.execute(params![
-                partition.id.to_string(),
-                generation,
-                node.id.to_string(),
-                serde_json::to_string(node)?,
-            ])?;
-        }
-    }
-    {
-        let mut statement = transaction.prepare(
-            "INSERT INTO code_edges(
-                partition_id, generation, id, source_id, target_id, edge_json
-             ) VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
-        )?;
-        for edge in partition.edges.values() {
-            statement.execute(params![
-                partition.id.to_string(),
-                generation,
-                edge.id.to_string(),
-                edge.source.to_string(),
-                edge.target.to_string(),
-                serde_json::to_string(edge)?,
-            ])?;
-        }
-    }
+    insert_nodes(transaction, partition, generation)?;
+    insert_edges(transaction, partition, generation)?;
     transaction.execute(
         "DELETE FROM code_nodes WHERE partition_id = ?1 AND generation < ?2",
         params![partition.id.to_string(), generation],
@@ -443,36 +455,87 @@ fn replace_manifest_scopes_in_transaction(
             )?;
         }
     }
-    {
-        let mut statement = transaction.prepare(
-            "INSERT INTO code_manifest(
-                project_id, relative_path, length, modified_unix_nanos, content_hash, entry_json
-             ) VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
-        )?;
-        for entry in entries {
-            insert_manifest_entry(&mut statement, project_id, entry)?;
-        }
-    }
+    insert_manifest_entries(transaction, project_id, entries)?;
     populate_path_search(transaction, project_id, entries.iter())?;
     Ok(())
 }
 
-fn insert_manifest_entry(
-    statement: &mut rusqlite::Statement<'_>,
-    project_id: ProjectId,
-    entry: &ManifestEntry,
+fn insert_nodes(
+    transaction: &Transaction<'_>,
+    partition: &GraphPartition,
+    generation: i64,
 ) -> Result<(), GraphStoreError> {
-    statement.execute(params![
-        project_id.to_string(),
-        &entry.relative_path,
-        i64::try_from(entry.metadata.length).map_err(|_| GraphStoreError::IntegerRange)?,
-        entry
-            .metadata
-            .modified_unix_nanos
-            .map(|value| value.to_string()),
-        entry.content_hash.to_string(),
-        serde_json::to_string(entry)?,
-    ])?;
+    let rows = partition.nodes.values().collect::<Vec<_>>();
+    for chunk in rows.chunks(INSERT_BATCH_ROWS) {
+        let sql = format!(
+            "INSERT INTO code_nodes(partition_id, generation, id, node_json) VALUES {}",
+            value_groups(chunk.len(), 4)
+        );
+        let mut values = Vec::with_capacity(chunk.len() * 4);
+        for node in chunk {
+            values.push(Value::Text(partition.id.to_string()));
+            values.push(Value::Integer(generation));
+            values.push(Value::Text(node.id.to_string()));
+            values.push(Value::Text(serde_json::to_string(node)?));
+        }
+        transaction.execute(&sql, params_from_iter(values))?;
+    }
+    Ok(())
+}
+
+fn insert_edges(
+    transaction: &Transaction<'_>,
+    partition: &GraphPartition,
+    generation: i64,
+) -> Result<(), GraphStoreError> {
+    let rows = partition.edges.values().collect::<Vec<_>>();
+    for chunk in rows.chunks(INSERT_BATCH_ROWS) {
+        let sql = format!(
+            "INSERT INTO code_edges(partition_id, generation, id, source_id, target_id, edge_json) VALUES {}",
+            value_groups(chunk.len(), 6)
+        );
+        let mut values = Vec::with_capacity(chunk.len() * 6);
+        for edge in chunk {
+            values.push(Value::Text(partition.id.to_string()));
+            values.push(Value::Integer(generation));
+            values.push(Value::Text(edge.id.to_string()));
+            values.push(Value::Text(edge.source.to_string()));
+            values.push(Value::Text(edge.target.to_string()));
+            values.push(Value::Text(serde_json::to_string(edge)?));
+        }
+        transaction.execute(&sql, params_from_iter(values))?;
+    }
+    Ok(())
+}
+
+fn insert_manifest_entries(
+    transaction: &Transaction<'_>,
+    project_id: ProjectId,
+    entries: &[ManifestEntry],
+) -> Result<(), GraphStoreError> {
+    for chunk in entries.chunks(INSERT_BATCH_ROWS) {
+        let sql = format!(
+            "INSERT INTO code_manifest(project_id, relative_path, length, modified_unix_nanos, content_hash, entry_json) VALUES {}",
+            value_groups(chunk.len(), 6)
+        );
+        let mut values = Vec::with_capacity(chunk.len() * 6);
+        for entry in chunk {
+            values.push(Value::Text(project_id.to_string()));
+            values.push(Value::Text(entry.relative_path.clone()));
+            values.push(Value::Integer(
+                i64::try_from(entry.metadata.length).map_err(|_| GraphStoreError::IntegerRange)?,
+            ));
+            values.push(
+                entry
+                    .metadata
+                    .modified_unix_nanos
+                    .map_or(Value::Null, |value| Value::Text(value.to_string())),
+            );
+            values.push(Value::Text(entry.content_hash.to_string()));
+            values.push(Value::Text(serde_json::to_string(entry)?));
+        }
+        transaction.execute(&sql, params_from_iter(values))?;
+    }
     Ok(())
 }
 
@@ -481,12 +544,31 @@ fn populate_path_search<'a>(
     project_id: ProjectId,
     entries: impl IntoIterator<Item = &'a ManifestEntry>,
 ) -> Result<(), GraphStoreError> {
-    let mut statement = transaction
-        .prepare("INSERT INTO code_paths_fts(project_id, relative_path) VALUES (?1, ?2)")?;
-    for entry in entries {
-        statement.execute(params![project_id.to_string(), &entry.relative_path])?;
+    let entries = entries.into_iter().collect::<Vec<_>>();
+    for chunk in entries.chunks(INSERT_BATCH_ROWS) {
+        let sql = format!(
+            "INSERT INTO code_paths_fts(project_id, relative_path) VALUES {}",
+            value_groups(chunk.len(), 2)
+        );
+        let mut values = Vec::with_capacity(chunk.len() * 2);
+        for entry in chunk {
+            values.push(Value::Text(project_id.to_string()));
+            values.push(Value::Text(entry.relative_path.clone()));
+        }
+        transaction.execute(&sql, params_from_iter(values))?;
     }
     Ok(())
+}
+
+fn value_groups(rows: usize, columns: usize) -> String {
+    debug_assert!(rows > 0 && columns > 0);
+    let row = format!(
+        "({})",
+        std::iter::repeat_n("?", columns)
+            .collect::<Vec<_>>()
+            .join(",")
+    );
+    std::iter::repeat_n(row, rows).collect::<Vec<_>>().join(",")
 }
 
 fn escape_like(value: &str) -> String {
@@ -518,7 +600,7 @@ mod tests {
             .pragma_query_value(None, "temp_store", |row| row.get(0))
             .unwrap();
 
-        assert_eq!(cache_kib, -65_536);
+        assert_eq!(cache_kib, GRAPH_CACHE_KIB);
         assert_eq!(temp_store, 2);
     }
 
@@ -583,5 +665,66 @@ mod tests {
         assert_eq!(generations, vec![1, 1]);
         assert_eq!(store.load_partition(first.id).unwrap(), Some(first));
         assert_eq!(store.load_partition(second.id).unwrap(), Some(second));
+    }
+
+    #[test]
+    fn bulk_partition_batch_rebuilds_secondary_indexes_atomically() {
+        let temporary = tempfile::tempdir().unwrap();
+        let path = temporary.path().join("workflow.db");
+        drop(workflow_store::Store::open(&path, std::num::NonZeroUsize::new(1).unwrap()).unwrap());
+        let project = ProjectId::new();
+        let partition = GraphPartition {
+            edges: Default::default(),
+            external_nodes: Default::default(),
+            id: PartitionId::new(project, "src"),
+            nodes: Default::default(),
+            project_id: project,
+            scope: "src".to_owned(),
+        };
+        let timestamp = WorkflowTimestamp::parse("2026-08-12T12:00:00Z").unwrap();
+        let mut store = GraphStore::open(path).unwrap();
+        assert_eq!(secondary_index_count(&store.connection), 3);
+
+        let batch = store.bulk_partition_batch(timestamp).unwrap();
+        assert_eq!(secondary_index_count(&batch.transaction), 0);
+        batch.replace_partition(&partition).unwrap();
+        batch.commit().unwrap();
+
+        assert_eq!(secondary_index_count(&store.connection), 3);
+        assert_eq!(store.load_partition(partition.id).unwrap(), Some(partition));
+    }
+
+    #[test]
+    fn rolling_back_bulk_partition_batch_restores_secondary_indexes() {
+        let temporary = tempfile::tempdir().unwrap();
+        let path = temporary.path().join("workflow.db");
+        drop(workflow_store::Store::open(&path, std::num::NonZeroUsize::new(1).unwrap()).unwrap());
+        let mut store = GraphStore::open(path).unwrap();
+        {
+            let batch = store
+                .bulk_partition_batch(WorkflowTimestamp::parse("2026-08-12T12:00:00Z").unwrap())
+                .unwrap();
+            assert_eq!(secondary_index_count(&batch.transaction), 0);
+        }
+        assert_eq!(secondary_index_count(&store.connection), 3);
+    }
+
+    fn secondary_index_count(connection: &Connection) -> u32 {
+        connection
+            .query_row(
+                "SELECT count(*) FROM sqlite_schema
+                 WHERE type = 'index' AND name IN
+                   ('code_nodes_id', 'code_edges_source', 'code_edges_target')",
+                [],
+                |row| row.get(0),
+            )
+            .unwrap()
+    }
+
+    #[test]
+    fn multi_row_insert_groups_stay_below_the_legacy_sqlite_bind_limit() {
+        let sql = value_groups(INSERT_BATCH_ROWS, 6);
+        assert_eq!(sql.matches('?').count(), INSERT_BATCH_ROWS * 6);
+        assert_eq!(value_groups(2, 3), "(?,?,?),(?,?,?)");
     }
 }

@@ -22,6 +22,8 @@ use crate::{
     parser::ParseError,
 };
 
+const BULK_SECONDARY_INDEX_REBUILD_FILES: usize = 50_000;
+
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 pub struct IndexTimings {
     pub hashing: Duration,
@@ -33,6 +35,7 @@ pub struct IndexTimings {
 
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 pub struct IndexReport {
+    pub bulk_secondary_index_rebuild: bool,
     pub edges: u64,
     pub hashed_files: u64,
     pub inventory: InventoryStats,
@@ -126,6 +129,9 @@ pub fn index_project(
                 .push(entry);
         }
     }
+    let supported_file_count = scopes.values().map(Vec::len).sum();
+    let bulk_secondary_index_rebuild =
+        use_bulk_secondary_index_rebuild(prior.entries().is_empty(), supported_file_count);
     let current = scopes
         .values()
         .flatten()
@@ -165,6 +171,7 @@ pub fn index_project(
     let (sender, receiver) = sync_channel::<Result<IndexedScope, IndexError>>(worker_count * 2);
     let mut manifest_entries = Vec::new();
     let mut report = IndexReport {
+        bulk_secondary_index_rebuild,
         inventory: inventory_stats,
         timings: IndexTimings {
             inventory: inventory_time,
@@ -172,7 +179,11 @@ pub fn index_project(
         },
         ..IndexReport::default()
     };
-    let batch = graph_store.partition_batch(WorkflowTimestamp::now())?;
+    let batch = if bulk_secondary_index_rebuild {
+        graph_store.bulk_partition_batch(WorkflowTimestamp::now())?
+    } else {
+        graph_store.partition_batch(WorkflowTimestamp::now())?
+    };
     let worker_result = thread::scope(|thread_scope| {
         let work = &work;
         for _ in 0..worker_count {
@@ -293,4 +304,20 @@ fn index_scope(
 
 fn scope_of(path: &str) -> &str {
     path.rsplit_once('/').map_or("root", |(scope, _)| scope)
+}
+
+fn use_bulk_secondary_index_rebuild(cold_index: bool, supported_files: usize) -> bool {
+    cold_index && supported_files >= BULK_SECONDARY_INDEX_REBUILD_FILES
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn bulk_secondary_index_rebuild_is_reserved_for_large_cold_indexes() {
+        assert!(!use_bulk_secondary_index_rebuild(false, 500_000));
+        assert!(!use_bulk_secondary_index_rebuild(true, 49_999));
+        assert!(use_bulk_secondary_index_rebuild(true, 50_000));
+    }
 }

@@ -56,6 +56,7 @@ struct CorpusResults {
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
 struct GraphResults {
+    bulk_secondary_index_rebuild: bool,
     context_bytes: usize,
     context_items: usize,
     edges: u64,
@@ -258,6 +259,7 @@ fn main() {
             source_files: options.source_files,
         },
         graph: GraphResults {
+            bulk_secondary_index_rebuild: index_report.bulk_secondary_index_rebuild,
             context_bytes: context.bytes,
             context_items: context.items.len(),
             edges: index_report.edges,
