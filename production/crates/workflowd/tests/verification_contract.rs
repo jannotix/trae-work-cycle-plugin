@@ -3,7 +3,9 @@ use std::fs;
 use workflow_core::{
     ArchitecturePlan, ContentDigest, EvidenceKind, PlannedTask, Requirement, TaskId,
 };
-use workflowd::verification::{VerificationExecutor, VerificationPlan, discover};
+use workflowd::verification::{
+    CommandAuthorization, VerificationExecutor, VerificationPlan, discover,
+};
 
 fn architecture(scopes: Vec<String>, commands: Vec<String>) -> ArchitecturePlan {
     ArchitecturePlan::validate(
@@ -95,7 +97,18 @@ fn missing_mandatory_database_and_browser_capabilities_block_explicitly() {
 #[test]
 fn unsafe_commands_are_rejected_without_a_shell() {
     let directory = tempfile::tempdir().unwrap();
-    for command in ["rm -rf project", "bun test && deploy", "git reset --hard"] {
+    for command in [
+        "rm -rf project",
+        "bun test && deploy",
+        "git reset --hard",
+        "bash -c echo",
+        "python -c print(1)",
+        "node --eval process.exit(0)",
+        "node -p process.version",
+        "php -r echo(1)",
+        "npm run publish:prod",
+        "bun run deploy-prod",
+    ] {
         assert!(
             discover(
                 directory.path(),
@@ -114,6 +127,57 @@ fn unsafe_commands_are_rejected_without_a_shell() {
     )
     .unwrap();
     assert!(serde_json::from_value::<VerificationPlan>(value).is_ok());
+}
+
+#[test]
+fn only_bounded_non_project_commands_are_preapproved() {
+    let directory = tempfile::tempdir().unwrap();
+    let plan = discover(
+        directory.path(),
+        &architecture(
+            vec!["src".to_owned()],
+            vec![
+                "rustc --version".to_owned(),
+                "cargo fmt --all --check".to_owned(),
+                "cargo test --all-features".to_owned(),
+                "node scripts/verify.mjs".to_owned(),
+            ],
+        ),
+    )
+    .unwrap();
+
+    let commands: Vec<_> = plan
+        .gates
+        .iter()
+        .filter_map(|gate| match &gate.executor {
+            VerificationExecutor::Command {
+                arguments,
+                authorization,
+                program,
+            } => Some((program.as_str(), arguments.as_slice(), *authorization)),
+            _ => None,
+        })
+        .collect();
+    assert!(commands.contains(&(
+        "rustc",
+        &["--version".to_owned()][..],
+        CommandAuthorization::Preapproved,
+    )));
+    assert!(commands.contains(&(
+        "cargo",
+        &["fmt".to_owned(), "--all".to_owned(), "--check".to_owned()][..],
+        CommandAuthorization::Preapproved,
+    )));
+    assert!(commands.contains(&(
+        "cargo",
+        &["test".to_owned(), "--all-features".to_owned()][..],
+        CommandAuthorization::ExplicitConsent,
+    )));
+    assert!(commands.contains(&(
+        "node",
+        &["scripts/verify.mjs".to_owned()][..],
+        CommandAuthorization::ExplicitConsent,
+    )));
 }
 
 #[test]

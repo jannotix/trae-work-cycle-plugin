@@ -183,7 +183,8 @@ the product license, third-party notices, README, and its platform executable.
 | --- | --- |
 | T00 | Completed — `78a0de3` |
 | T01 | Implemented locally — Windows extracted-archive smoke passed; WSL runner receipt pending |
-| T02–T09 | Not started |
+| T02 | Implemented locally — policy, expiring single-use ledgered consent, runner boundary and MCP quick/full/repair/concurrency certification passed on Windows; WSL receipt pending |
+| T03–T09 | Not started |
 
 The existence of v1.0.0, a green unit suite, or a corrected plan does not change
 this release from `BLOCKED`.

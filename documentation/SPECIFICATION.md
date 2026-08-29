@@ -155,6 +155,8 @@ Gate discovery is deterministic:
 
 A required gate without a project-native command surfaces as `unavailable`, which fails verification. Gates are never silently skipped or relabeled. Browser evidence is captured through Trae Work `/browser_use` by the executor and registered via `cycle_evidence`; during verification the daemon binds each browser record to the frozen candidate digest, so late file changes invalidate the evidence.
 
+Project commands are not an operating-system sandbox boundary. The command policy rejects shells, inline interpreter code, destructive/publish verbs and shell operators. Only bounded non-project probes are preapproved. Every other exact command pauses verification and returns a consent request. `cycle_consent` requires explicit user confirmation and writes a 15-minute, single-use receipt bound to workflow, frozen candidate, verification plan, evidence gate, command digest and working-directory digest. The receipt becomes usable only after its permission event is appended to the audit ledger; verification consumes all required receipts atomically before starting any command.
+
 ## 14. Candidate Freeze and Exact Delivery
 
 Freeze refuses a dirty worktree. The candidate manifest records per-file digests and kinds, the exact diff, exact file bytes, executable modes, and environment, configuration and dependency digests. Review and arbitration verdicts bind to the candidate digest. Delivery verifies the source preimage against the indexed repository, reserves the delivery, promotes the exact approved bytes while preserving concurrent changes, re-verifies them and writes the completion receipt. A source that changed after freeze is an explicit delivery conflict, never a silent merge.
@@ -215,6 +217,7 @@ All tools are namespaced `cycle_*`. Long-running operations follow the job patte
 | `cycle_submit_architecture` | Submit the architect plan for validation and acceptance |
 | `cycle_execution_report` | Report task completion, blockage or plan defect |
 | `cycle_verify` | Run the verification plan over the frozen candidate (job) |
+| `cycle_consent` | Grant one expiring, single-use verification-command consent after explicit user approval |
 | `cycle_freeze` | Freeze the exact candidate (job) |
 | `cycle_review` | Submit an independent review verdict |
 | `cycle_arbitrate` | Submit the arbiter verdict (job) |
@@ -265,7 +268,8 @@ Contents: `control-plane.db`, `runtime/` (IPC secret, ledger key, pid), `worktre
 2. Daemon trust boundary: every request validated against durable workflow ownership; project keys, identifiers and paths are bounded and sanitized; relative paths only.
 3. Secrets: never in `roles.json`, never in ledger, logs, exports or tool output; key files 0600; ledger export applies redaction.
 4. Prompt injection: repository content, tool output, model output are untrusted data; they cannot override user intent, role boundaries or permission policy.
-5. Full threat model maintained as a separate document.
+5. Verification execution: worktree isolation is not OS sandboxing. Nonpreapproved commands require an exact, ledgered user consent receipt; consent does not reduce the process privileges of the local account.
+6. Full threat model maintained as a separate document.
 
 ## 26. Error Taxonomy and Recovery
 

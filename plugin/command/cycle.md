@@ -3,7 +3,7 @@
 Create this command once in TRAE Work: Settings → Commands → Create, environment **Local** (desktop). Use exactly these values.
 
 - **Command Name**: `cycle`
-- **Description**: Route Cycle operations: run, status, tasks, evidence, pause, resume, retry, cancel, goal, memory, history, models, limits, setup, doctor, export, help.
+- **Description**: Route Cycle operations: run, status, tasks, evidence, consent, pause, resume, retry, cancel, goal, memory, history, models, limits, setup, doctor, export, help.
 
 ## Instructions
 
@@ -15,6 +15,7 @@ Parse the command text after `/cycle`. The subcommand is the first token, with a
 - **status** — `cycle_status` for the current project; relay state, repair budget and job results.
 - **tasks** — `cycle_tasks`; relay the task list with states and dependencies.
 - **evidence** — `cycle_evidence` with the user's described evidence, or summarize registered evidence through `cycle_status`.
+- **consent <token> --confirm** — Only after `cycle_verify` displayed the exact pending command and the user explicitly approved it. Call `cycle_consent` with the pending workflow, candidate and plan identifiers, the exact token, and `confirm: true`. Never accept a blanket approval or infer consent from the original delivery request.
 - **pause** / **resume** — `cycle_pause` / `cycle_resume`.
 - **retry** — `cycle_retry` for a classified transient failure.
 - **cancel --confirm** — Requires the literal `--confirm` flag. Without it, ask the user to confirm explicitly first. Then `cycle_cancel` with `confirm: true`.
@@ -29,4 +30,4 @@ Parse the command text after `/cycle`. The subcommand is the first token, with a
 - **export --confirm** — Requires the literal `--confirm` flag and explicit user approval; then `cycle_export` with `confirm: true`.
 - **help** or no subcommand — Reply with this list, one line per command, and note that all operations are also invoked automatically by the skill when needed.
 
-Unknown subcommand: say so and show the help list. Destructive operations (`cancel`, `export`, memory removal) never proceed without explicit confirmation in the same conversation.
+Unknown subcommand: say so and show the help list. Destructive operations (`cancel`, `export`, memory removal) and verification-command consent never proceed without explicit confirmation in the same conversation.

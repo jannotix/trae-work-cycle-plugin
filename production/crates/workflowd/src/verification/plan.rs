@@ -12,12 +12,22 @@ pub enum VerificationRisk {
     ProjectCode,
 }
 
+#[derive(Clone, Copy, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum CommandAuthorization {
+    Preapproved,
+    #[default]
+    ExplicitConsent,
+}
+
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum VerificationExecutor {
     CandidateIntegrity,
     Command {
         arguments: Vec<String>,
+        #[serde(default)]
+        authorization: CommandAuthorization,
         program: String,
     },
     SecretScan,
@@ -64,7 +74,10 @@ impl VerificationPlan {
             {
                 return Err(VerificationPlanError::InvalidGate);
             }
-            if let VerificationExecutor::Command { arguments, program } = &gate.executor {
+            if let VerificationExecutor::Command {
+                arguments, program, ..
+            } = &gate.executor
+            {
                 validate_command(program, arguments)?;
             }
         }
@@ -319,6 +332,7 @@ fn add_command(
     gates.push(VerificationGate {
         executor: VerificationExecutor::Command {
             arguments: arguments.to_vec(),
+            authorization: authorization_for(program, arguments),
             program: program.clone(),
         },
         id: EvidenceId::new(),
@@ -338,30 +352,114 @@ fn validate_command(program: &str, arguments: &[String]) -> Result<(), Verificat
         || program.contains(['\0', '\n', '\r'])
         || arguments.iter().any(|argument| {
             argument.contains(['\0', '\n', '\r'])
-                || matches!(argument.as_str(), "&&" | "||" | ";" | "|" | "<" | ">")
+                || matches!(
+                    argument.as_str(),
+                    "&&" | "||" | ";" | "|" | "<" | ">" | ">>" | "&"
+                )
         })
     {
         return Err(VerificationPlanError::InvalidCommand);
     }
-    let executable = program
-        .replace('\\', "/")
-        .rsplit('/')
-        .next()
-        .unwrap_or(program)
-        .trim_end_matches(".exe")
-        .to_ascii_lowercase();
+    let executable = executable_name(program);
     if matches!(
         executable.as_str(),
-        "cmd" | "del" | "git" | "powershell" | "pwsh" | "rm" | "sh" | "shutdown"
-    ) || arguments.iter().any(|argument| {
+        "bash"
+            | "cmd"
+            | "del"
+            | "git"
+            | "powershell"
+            | "pwsh"
+            | "rm"
+            | "sh"
+            | "shutdown"
+            | "sudo"
+            | "wsl"
+            | "zsh"
+    ) || arguments
+        .iter()
+        .any(|argument| dangerous_argument(argument))
+    {
+        return Err(VerificationPlanError::InvalidCommand);
+    }
+    if matches!(
+        executable.as_str(),
+        "node" | "perl" | "php" | "python" | "python3" | "ruby"
+    ) && arguments.iter().any(|argument| {
         matches!(
             argument.to_ascii_lowercase().as_str(),
-            "deploy" | "destroy" | "drop" | "publish" | "push" | "reset"
+            "-c" | "-e" | "-p" | "-r" | "--eval" | "--execute" | "--print"
         )
     }) {
         return Err(VerificationPlanError::InvalidCommand);
     }
     Ok(())
+}
+
+fn dangerous_argument(argument: &str) -> bool {
+    argument
+        .to_ascii_lowercase()
+        .split(|character: char| !character.is_ascii_alphanumeric())
+        .any(|part| {
+            matches!(
+                part,
+                "deploy" | "destroy" | "drop" | "publish" | "push" | "reset"
+            )
+        })
+}
+
+fn executable_name(program: &str) -> String {
+    let mut executable = program
+        .replace('\\', "/")
+        .rsplit('/')
+        .next()
+        .unwrap_or(program)
+        .to_ascii_lowercase();
+    for suffix in [".exe", ".cmd", ".bat", ".ps1"] {
+        if executable.ends_with(suffix) {
+            executable.truncate(executable.len() - suffix.len());
+            break;
+        }
+    }
+    executable
+}
+
+fn authorization_for(program: &str, arguments: &[String]) -> CommandAuthorization {
+    let executable = executable_name(program);
+    let version_probe =
+        matches!(arguments, [argument] if matches!(argument.as_str(), "--version" | "-V"));
+    if version_probe
+        && matches!(
+            executable.as_str(),
+            "bun"
+                | "cargo"
+                | "go"
+                | "java"
+                | "node"
+                | "npm"
+                | "pnpm"
+                | "python"
+                | "python3"
+                | "rustc"
+                | "yarn"
+        )
+    {
+        return CommandAuthorization::Preapproved;
+    }
+    if executable == "cargo"
+        && matches!(
+            arguments,
+            [first, second] if first == "fmt" && second == "--check"
+        )
+        || executable == "cargo"
+            && matches!(
+                arguments,
+                [first, second, third]
+                    if first == "fmt" && second == "--all" && third == "--check"
+            )
+    {
+        return CommandAuthorization::Preapproved;
+    }
+    CommandAuthorization::ExplicitConsent
 }
 
 fn classify(command: &str) -> (String, EvidenceKind) {

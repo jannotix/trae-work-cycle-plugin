@@ -200,7 +200,7 @@ fn plan_value(request_digest: &str, write_scope: &str, requirements: &[&str]) ->
         objective: "Complete the change.".to_owned(),
         requirement_ids: requirements.iter().map(|id| (*id).to_owned()).collect(),
         title: "Complete".to_owned(),
-        verification_commands: vec!["rustc --version".to_owned()],
+        verification_commands: vec!["rustc --print sysroot".to_owned()],
         write_scopes: vec![write_scope.to_owned()],
     };
     let plan = ArchitecturePlan::validate(
@@ -270,6 +270,34 @@ fn freeze_and_verify(
     let candidate_id = frozen["candidateId"].as_str().unwrap().to_owned();
     let candidate_digest = frozen["candidateDigest"].as_str().unwrap().to_owned();
     let plan_id = frozen["planId"].as_str().unwrap().to_owned();
+    let consent_check = start_tool_job(
+        client,
+        project_key,
+        "cycle_verify",
+        json!({"candidate_id": candidate_id, "plan_id": plan_id, "project_key": project_key, "workflow_id": workflow_id}),
+    );
+    assert_eq!(consent_check["mandatoryPassed"], false);
+    assert_eq!(consent_check["workflowState"], "verification");
+    let consent_requests = consent_check["consentRequired"]
+        .as_array()
+        .expect("project commands require explicit consent");
+    assert!(!consent_requests.is_empty());
+    for request in consent_requests {
+        let consent = call_tool(
+            client,
+            "cycle_consent",
+            json!({
+                "candidate_id": candidate_id,
+                "confirm": true,
+                "consent_token": request["consent_token"],
+                "plan_id": plan_id,
+                "project_key": project_key,
+                "workflow_id": workflow_id,
+            }),
+        );
+        assert_eq!(consent["singleUse"], true);
+        assert!(consent["expiresAtUnixMillis"].as_i64().is_some());
+    }
     let verified = start_tool_job(
         client,
         project_key,

@@ -15,7 +15,7 @@ use workflow_ipc::ManagedBrowserAttestation;
 use workflow_ledger::Redactor;
 use workflow_store::CandidateFilePayload;
 
-use super::{VerificationExecutor, VerificationGate, VerificationPlan};
+use super::{CommandAuthorization, VerificationExecutor, VerificationGate, VerificationPlan};
 
 const RETAINED_OUTPUT_BYTES: usize = 1024 * 1024;
 const OUTPUT_PIPE_CLOSE_TIMEOUT: Duration = Duration::from_secs(5);
@@ -86,6 +86,27 @@ pub async fn run_with_attestations(
     exact_files: &[CandidateFilePayload],
     attestations: &[ManagedBrowserAttestation],
 ) -> Result<VerificationRun, VerificationRunError> {
+    run_with_authorizations(
+        repository,
+        plan,
+        manifest,
+        exact_diff,
+        exact_files,
+        attestations,
+        &BTreeSet::new(),
+    )
+    .await
+}
+
+pub async fn run_with_authorizations(
+    repository: &Path,
+    plan: &VerificationPlan,
+    manifest: &CandidateManifest,
+    exact_diff: &[u8],
+    exact_files: &[CandidateFilePayload],
+    attestations: &[ManagedBrowserAttestation],
+    authorized_gate_ids: &BTreeSet<EvidenceId>,
+) -> Result<VerificationRun, VerificationRunError> {
     let planned: BTreeSet<_> = plan.evidence_ids().into_iter().collect();
     let frozen: BTreeSet<_> = manifest.evidence_ids().iter().copied().collect();
     if planned != frozen {
@@ -101,7 +122,9 @@ pub async fn run_with_attestations(
     let mut mandatory_passed = true;
     let mut infrastructure_blocked = false;
     for gate in &plan.gates {
-        let result = if let Some(result) = managed_browser_gate(gate, manifest, attestations) {
+        let result = if requires_consent(gate) && !authorized_gate_ids.contains(&gate.id) {
+            missing_consent_gate(gate, manifest)?
+        } else if let Some(result) = managed_browser_gate(gate, manifest, attestations) {
             result
         } else {
             run_gate(repository, gate, manifest, exact_diff, exact_files).await?
@@ -118,6 +141,45 @@ pub async fn run_with_attestations(
         mandatory_passed,
         outputs,
         records,
+    })
+}
+
+fn requires_consent(gate: &VerificationGate) -> bool {
+    matches!(
+        gate.executor,
+        VerificationExecutor::Command {
+            authorization: CommandAuthorization::ExplicitConsent,
+            ..
+        }
+    )
+}
+
+fn missing_consent_gate(
+    gate: &VerificationGate,
+    manifest: &CandidateManifest,
+) -> Result<GateResult, VerificationRunError> {
+    let reason = "Explicit user consent is required before this project command may execute.";
+    let timestamp = WorkflowTimestamp::now();
+    let record = EvidenceRecord {
+        candidate_digest: manifest.digest(),
+        exit_code: None,
+        finished_at: timestamp,
+        id: gate.id,
+        invocation: invocation(gate),
+        kind: gate.kind,
+        output_digest: ContentDigest::of(reason.as_bytes()),
+        skip_reason: Some(reason.to_owned()),
+        started_at: timestamp,
+        status: EvidenceStatus::Skipped,
+        tool: "consent-required".to_owned(),
+        tool_version: env!("CARGO_PKG_VERSION").to_owned(),
+    };
+    record
+        .validate()
+        .map_err(|_| VerificationRunError::EvidenceMismatch)?;
+    Ok(GateResult {
+        output: reason.to_owned(),
+        record,
     })
 }
 
@@ -318,7 +380,9 @@ async fn run_gate(
                 "unavailable".to_owned(),
                 "unavailable".to_owned(),
             ),
-            VerificationExecutor::Command { arguments, program } => {
+            VerificationExecutor::Command {
+                arguments, program, ..
+            } => {
                 let tool_version = probe_tool_version(repository, program).await;
                 let command = execute_command(
                     repository,
@@ -546,7 +610,9 @@ fn combined_digest(stdout: &StreamCapture, stderr: &StreamCapture) -> ContentDig
 fn invocation(gate: &VerificationGate) -> String {
     match &gate.executor {
         VerificationExecutor::CandidateIntegrity => "candidate-integrity".to_owned(),
-        VerificationExecutor::Command { arguments, program } => std::iter::once(program.as_str())
+        VerificationExecutor::Command {
+            arguments, program, ..
+        } => std::iter::once(program.as_str())
             .chain(arguments.iter().map(String::as_str))
             .collect::<Vec<_>>()
             .join(" "),

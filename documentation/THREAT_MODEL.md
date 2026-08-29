@@ -27,7 +27,7 @@ Version 1.0.0. Scope: the local product as shipped — MCP frontend, control-pla
 | MCP stdio | Malformed or unauthorized requests | Single local consumer (Trae Work); protocol-validated JSON-RPC; unknown tools rejected |
 | Daemon IPC (named pipe / Unix socket) | Local process impersonation | Per-boot random secret with challenge-response MAC on every frame; the secret file is private to the data directory |
 | Role endpoints | Key theft, response tampering, provider outage | Keys referenced not stored; rustls TLS; strict structured-output validation with binding/advisory distinction; transient (transport, 429, 5xx) vs permanent error classification; fail-closed on missing configuration |
-| Verification runner | Malicious project commands (the pipeline executes what the plan declares) | Commands run against the frozen candidate in the managed worktree, not the user's checkout; outputs digested into evidence; a hostile command still cannot reach the source repository before an approved promotion |
+| Verification runner | A project command reads, changes, exfiltrates or destroys data reachable by the local account | Shells, inline interpreter code and destructive/publish verbs are rejected. Only bounded version/format probes are preapproved. Every other exact command requires an expiring, single-use user consent receipt bound to workflow, candidate, gate, command digest and worktree digest; the permission is ledgered before it becomes usable. Commands run without a shell and with a reduced environment, but there is no OS sandbox |
 | Candidate integrity | Late edits smuggled past review | Freeze captures exact bytes and modes; any post-freeze change invalidates evidence and reviews by digest mismatch; promotion re-verifies and writes the frozen bytes |
 | Scope escalation | Executor writes outside the authorized scope | Write scopes declared in the accepted architecture plan; blind reviewers check boundaries; arbiter requires full requirement coverage |
 | Audit tampering | Silent history rewriting | Hash chain makes any edit detectable; checkpoints sign the chain head; verification failure stops the workflow and requires trusted backup restore |
@@ -37,11 +37,11 @@ Version 1.0.0. Scope: the local product as shipped — MCP frontend, control-pla
 
 ## Residual risks (accepted)
 
-- Verification executes project-declared commands. This is inherent to real verification; the worktree boundary and exact-byte promotion contain the blast radius, but a malicious repository remains a malicious repository. Users should not run cycles against repositories they do not intend to build.
+- A worktree isolates Git state, not operating-system authority. An approved verification command can read or modify any path the local account can reach and can use raw network APIs. Consent makes that authority explicit and auditable; it does not sandbox it. Users should reject commands from repositories they do not trust.
 - A fully compromised local machine defeats all local guarantees (key exfiltration, ledger forgery at rest). The ledger detects tampering; it cannot prevent it.
 - Role endpoint quality bounds delivery quality. The arbiter cannot detect a reviewer that lies coherently; binding verdicts bind responsibility, not truth.
 - The verification chain is local. It proves consistency of the local record, not external transparency.
 
 ## Notable non-goals
 
-No telemetry, no cloud account, no Trae Work credential access, no code execution outside the managed worktree and the declared verification commands.
+No telemetry, no Cycle cloud account, no Trae Work credential access. The control plane starts commands in the managed worktree, but an approved process is not prevented by Cycle from reaching other local paths or the network.

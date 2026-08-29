@@ -18,6 +18,7 @@ pub use goals::{GoalApplyResult, GoalPlanRecord};
 pub use leases::LeaseAcquisition;
 pub use paths::{DataPaths, PathError, Platform, ProjectIdentity};
 pub use tasks::TaskApplyResult;
+pub use verification::VerificationConsentBinding;
 pub use workflows::WorkflowApplyResult;
 
 use std::{
@@ -32,7 +33,7 @@ use std::{
 
 use rusqlite::{Connection, OpenFlags};
 
-pub const CURRENT_SCHEMA_VERSION: u32 = 17;
+pub const CURRENT_SCHEMA_VERSION: u32 = 18;
 
 pub fn backup_existing_database(
     source: impl AsRef<Path>,

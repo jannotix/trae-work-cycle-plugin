@@ -6,7 +6,7 @@ Version 1.0.0. Two surfaces exist: the `/cycle` command inside Trae Work and the
 
 - Leading colon is accepted: `/cycle:resume` equals `/cycle resume`.
 - Tools marked **job** return a `jobId` immediately; the result lands on `/cycle status` under `jobs` (`running` | `done` | `failed`, with `result` or `error`).
-- Destructive operations (`cancel`, `export`, memory removal) require the literal `--confirm` flag plus explicit user approval in the same conversation. Tools carry the equivalent `confirm: true` argument.
+- Destructive operations (`cancel`, `export`, memory removal) and project-command consent require the literal `--confirm` flag plus explicit user approval in the same conversation. Tools carry the equivalent `confirm: true` argument.
 - Fail-closed is the default: missing or invalid role configuration blocks every governed operation. Nothing is silently skipped or relabeled.
 
 ## `/cycle` command
@@ -17,6 +17,7 @@ Version 1.0.0. Two surfaces exist: the `/cycle` command inside Trae Work and the
 | `status` | `cycle_status` | Workflow state, phase, repair budget, job results. |
 | `tasks` | `cycle_tasks` | Task list with states, attempts and dependencies. |
 | `evidence` | `cycle_evidence` / `cycle_status` | Registers executor evidence or summarizes registered evidence. |
+| `consent <token> --confirm` | `cycle_consent` | Grants one pending command returned by `cycle_verify`; exact-command approval only, 15-minute expiry, single use. |
 | `resume` | `cycle_resume` | Resumes a paused or restarted workflow from the saved phase. |
 | `pause` | `cycle_pause` | Pauses at the next safe boundary. |
 | `retry` | `cycle_retry` | Retries a classified transient failure; repair budget untouched. |
@@ -32,7 +33,7 @@ Version 1.0.0. Two surfaces exist: the `/cycle` command inside Trae Work and the
 | `export --confirm` | `cycle_export` | Exports redacted history. |
 | `help` | — | The command list. |
 
-## MCP tools (36)
+## MCP tools (37)
 
 ### Installation and diagnostics
 
@@ -57,6 +58,7 @@ Version 1.0.0. Two surfaces exist: the `/cycle` command inside Trae Work and the
 | `cycle_execution_report` | Executor outcome: `blocked` or `plan_defect`. |
 | `cycle_freeze` **job** | Plans verification and freezes exact candidate bytes; requires a clean worktree. |
 | `cycle_verify` **job** | Runs the verification plan over the frozen candidate; optional managed-browser attestations. |
+| `cycle_consent` | Requires explicit user approval and `confirm: true`; grants one candidate/gate/command/worktree-bound consent token. |
 | `cycle_review` | Submits one binding blind review (ReviewVerdict). |
 | `cycle_arbitrate` **job** | Submits the arbiter verdict (ArbiterVerdict) bound to the original request. |
 | `cycle_promote` **job** | Delivers the approved exact bytes into the project directory. |

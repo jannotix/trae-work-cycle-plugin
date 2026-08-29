@@ -5,7 +5,7 @@ use workflow_core::{
     EvidenceRecord, EvidenceStatus, VerificationPlanId, WorkflowCommand, WorkflowId,
     WorkflowTimestamp,
 };
-use workflow_store::{Store, StoreError};
+use workflow_store::{Store, StoreError, VerificationConsentBinding};
 
 fn candidate(candidate_id: CandidateId) -> CandidateManifest {
     CandidateManifest::new(
@@ -250,4 +250,123 @@ fn skipped_evidence_keeps_versioned_attempts_and_exposes_the_latest_result() {
         store.load_candidate_evidence(candidate_id).unwrap(),
         vec![(rerun, "rerun".to_owned(), true)]
     );
+}
+
+#[test]
+fn verification_consent_is_exact_expiring_and_single_use() {
+    let directory = tempfile::tempdir().unwrap();
+    let mut store = Store::open(
+        directory.path().join("workflow.db"),
+        NonZeroUsize::new(1).unwrap(),
+    )
+    .unwrap();
+    let workflow_id = WorkflowId::new();
+    store
+        .apply_workflow_command(
+            workflow_id,
+            "consent-test-intake",
+            WorkflowCommand::CompleteIntake,
+            WorkflowTimestamp::now(),
+        )
+        .unwrap();
+    let candidate_id = CandidateId::new();
+    let candidate = candidate(candidate_id);
+    store
+        .save_candidate_once(
+            workflow_id,
+            &candidate,
+            b"diff",
+            &[],
+            WorkflowTimestamp::now(),
+        )
+        .unwrap();
+    let plan_id = VerificationPlanId::new();
+    store
+        .save_verification_plan_once(
+            plan_id,
+            workflow_id,
+            &serde_json::json!({"id": plan_id, "gates": []}),
+            WorkflowTimestamp::now(),
+        )
+        .unwrap();
+    let binding = VerificationConsentBinding {
+        candidate_digest: candidate.digest(),
+        candidate_id,
+        command_digest: ContentDigest::of(b"cargo-test"),
+        gate_id: EvidenceId::new(),
+        plan_id,
+        token: ContentDigest::of(b"consent-token"),
+        working_directory_digest: ContentDigest::of(b"worktree"),
+        workflow_id,
+    };
+
+    assert!(
+        !store
+            .grant_verification_consent(&binding, 2_000, WorkflowTimestamp::now())
+            .unwrap()
+    );
+    assert!(
+        !store
+            .claim_verification_consents(
+                workflow_id,
+                candidate_id,
+                plan_id,
+                &[binding.token],
+                1_000,
+                WorkflowTimestamp::now(),
+            )
+            .unwrap()
+    );
+    assert!(
+        store
+            .activate_verification_consent(binding.token, ContentDigest::of(b"audit-entry"))
+            .unwrap()
+    );
+    assert!(
+        store
+            .claim_verification_consents(
+                workflow_id,
+                candidate_id,
+                plan_id,
+                &[binding.token],
+                1_000,
+                WorkflowTimestamp::now(),
+            )
+            .unwrap()
+    );
+    assert!(
+        !store
+            .claim_verification_consents(
+                workflow_id,
+                candidate_id,
+                plan_id,
+                &[binding.token],
+                1_000,
+                WorkflowTimestamp::now(),
+            )
+            .unwrap()
+    );
+    store
+        .grant_verification_consent(&binding, 900, WorkflowTimestamp::now())
+        .unwrap();
+    assert!(
+        !store
+            .claim_verification_consents(
+                workflow_id,
+                candidate_id,
+                plan_id,
+                &[binding.token],
+                1_000,
+                WorkflowTimestamp::now(),
+            )
+            .unwrap()
+    );
+    let wrong_owner = VerificationConsentBinding {
+        workflow_id: WorkflowId::new(),
+        ..binding
+    };
+    assert!(matches!(
+        store.grant_verification_consent(&wrong_owner, 2_000, WorkflowTimestamp::now()),
+        Err(StoreError::AggregateConflict)
+    ));
 }

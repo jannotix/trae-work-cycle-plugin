@@ -68,6 +68,18 @@ pub enum ExecutionOutcome {
     PlanDefect,
 }
 
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct VerificationConsentRequest {
+    pub candidate_digest: ContentDigest,
+    pub command_digest: ContentDigest,
+    pub consent_token: ContentDigest,
+    pub gate_id: EvidenceId,
+    pub invocation: String,
+    pub validity_seconds: u64,
+    pub working_directory_digest: ContentDigest,
+}
+
 #[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(rename_all = "snake_case")]
 pub enum GoalControlAction {
@@ -174,6 +186,14 @@ pub enum ClientMessage {
         base_revision: String,
         candidate_id: CandidateId,
         evidence_ids: Vec<EvidenceId>,
+        plan_id: VerificationPlanId,
+        project_key: String,
+        request_id: u64,
+        workflow_id: WorkflowId,
+    },
+    GrantVerificationConsent {
+        candidate_id: CandidateId,
+        consent_token: ContentDigest,
         plan_id: VerificationPlanId,
         project_key: String,
         request_id: u64,
@@ -317,6 +337,18 @@ pub enum ServerMessage {
         request_id: u64,
         workflow_id: WorkflowId,
         workflow_state: String,
+    },
+    VerificationConsentGranted {
+        consent_token: ContentDigest,
+        expires_at_unix_millis: i64,
+        request_id: u64,
+        workflow_id: WorkflowId,
+    },
+    VerificationConsentRequired {
+        candidate_id: CandidateId,
+        requests: Vec<VerificationConsentRequest>,
+        request_id: u64,
+        workflow_id: WorkflowId,
     },
     VerificationPlanned {
         evidence_ids: Vec<EvidenceId>,

@@ -30,6 +30,7 @@ Cycle for Trae Work keeps the original request immutable, separates implementati
 - Real project tools and Git freeze/delivery, not a summary of what an agent claims it did.
 - Every role can run a different model configured locally by each user; the integration is model-agnostic.
 - Durable state lives outside the Trae Work installation, so application updates do not wipe workflows.
+- Project build/test commands are shown before execution unless covered by the narrow preapproved policy; approval is expiring, single-use and recorded in the audit ledger. Cycle does not claim an OS sandbox.
 - Windows 10/11 x64 with Trae Work Desktop and WSL2 Ubuntu x64 are the certified v1 lanes.
 - macOS is **compatible but untested** and carries no v1 support or certification claim.
 

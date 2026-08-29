@@ -1,6 +1,6 @@
 # Cycle for Trae Work — User Manual
 
-Version 1.0.0. Everything in this manual runs locally; no account, cloud service or telemetry is involved.
+Version 1.0.0. The control plane, state and verification runner are local; Cycle has no account, cloud service or telemetry. User-configured role endpoints may be cloud services and receive the bounded candidate/request material required for their role.
 
 ## 1. Requirements
 
@@ -21,6 +21,10 @@ The executor role is the model you already selected in Trae Work. Cycle never ch
 6. Run `/cycle setup`, then `/cycle doctor`. Both must report a healthy installation before the first cycle.
 
 The certified v1 lanes are Windows x64 and WSL2 Ubuntu x64. macOS is **compatible but untested**; no macOS result substitutes for either required lane.
+
+### Verification command consent
+
+Internal integrity checks and a narrow set of version/format probes are preapproved. Build, test, package-manager and repository scripts execute with the local user's operating-system privileges and are not sandboxed by Cycle. `cycle_verify` therefore returns the exact command vector and a consent token before each nonpreapproved command. Review it, then approve only that command with `/cycle consent <token> --confirm`. The receipt expires after 15 minutes, is single-use, and is bound to the workflow, frozen candidate, gate, command and worktree. Reject commands from repositories you do not trust.
 
 ## 3. Model configuration
 

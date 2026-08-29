@@ -1,13 +1,15 @@
-use std::{fs, path::Path, process::Command};
+use std::{collections::BTreeSet, fs, path::Path, process::Command};
 
 use workflow_core::{
     ArchitecturePlan, CandidateId, ContentDigest, EvidenceKind, EvidenceStatus, PlannedTask,
-    Requirement, TaskId,
+    Requirement, TaskId, WorkflowId,
 };
 use workflow_ipc::ManagedBrowserAttestation;
 use workflowd::{
     candidate::freeze,
-    verification::{discover, run, run_with_attestations},
+    verification::{
+        discover, required_consents, run, run_with_attestations, run_with_authorizations,
+    },
 };
 
 struct Repository {
@@ -42,6 +44,13 @@ impl Repository {
 }
 
 fn architecture(scopes: Vec<String>) -> ArchitecturePlan {
+    architecture_with_commands(scopes, vec!["rustc --version".to_owned()])
+}
+
+fn architecture_with_commands(
+    scopes: Vec<String>,
+    verification_commands: Vec<String>,
+) -> ArchitecturePlan {
     ArchitecturePlan::validate(
         ContentDigest::of(b"request"),
         vec![Requirement {
@@ -56,7 +65,7 @@ fn architecture(scopes: Vec<String>) -> ArchitecturePlan {
             objective: "Run deterministic verification.".to_owned(),
             requirement_ids: vec!["REQ-1".to_owned()],
             title: "Verify".to_owned(),
-            verification_commands: vec!["rustc --version".to_owned()],
+            verification_commands,
             write_scopes: scopes,
         }],
         vec![],
@@ -64,6 +73,67 @@ fn architecture(scopes: Vec<String>) -> ArchitecturePlan {
         vec!["Run the verification command.".to_owned()],
     )
     .unwrap()
+}
+
+#[tokio::test]
+async fn project_commands_require_the_exact_authorized_gate() {
+    let repository = Repository::new("consent-bound change\n");
+    let plan = discover(
+        &repository.path,
+        &architecture_with_commands(
+            vec!["candidate.txt".to_owned()],
+            vec!["rustc --print sysroot".to_owned()],
+        ),
+    )
+    .unwrap();
+    let candidate_id = CandidateId::new();
+    let frozen = freeze(
+        &repository.path,
+        &repository.base,
+        candidate_id,
+        plan.evidence_ids(),
+    )
+    .unwrap();
+    let requirements = required_consents(
+        &repository.path,
+        &plan,
+        &frozen.manifest,
+        WorkflowId::new(),
+        candidate_id,
+    );
+    assert_eq!(requirements.len(), 1);
+
+    let denied = run(
+        &repository.path,
+        &plan,
+        &frozen.manifest,
+        &frozen.exact_diff,
+        &frozen.exact_files,
+    )
+    .await
+    .unwrap();
+    assert!(!denied.mandatory_passed);
+    assert!(denied.infrastructure_blocked);
+    assert!(denied.records.iter().any(|record| {
+        record.id == requirements[0].binding.gate_id
+            && record.status == EvidenceStatus::Skipped
+            && record.tool == "consent-required"
+    }));
+
+    let authorized = BTreeSet::from([requirements[0].binding.gate_id]);
+    let allowed = run_with_authorizations(
+        &repository.path,
+        &plan,
+        &frozen.manifest,
+        &frozen.exact_diff,
+        &frozen.exact_files,
+        &[],
+        &authorized,
+    )
+    .await
+    .unwrap();
+    assert!(allowed.mandatory_passed);
+    assert!(!allowed.infrastructure_blocked);
 }
 
 #[tokio::test]

@@ -19,8 +19,9 @@ fn mcp_frontend_drives_the_control_plane_end_to_end() {
         .iter()
         .map(|tool| tool["name"].as_str().expect("tool name").to_owned())
         .collect::<Vec<_>>();
-    assert_eq!(names.len(), 36);
+    assert_eq!(names.len(), 37);
     assert!(names.contains(&"cycle_status".to_owned()));
+    assert!(names.contains(&"cycle_consent".to_owned()));
 
     let doctor = call_tool(&mut client, "cycle_doctor", json!({}));
     assert!(doctor.get("controlPlane").is_some());

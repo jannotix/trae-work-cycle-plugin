@@ -21,14 +21,14 @@ Evidence-gated software delivery for TRAE Work: five isolated roles, blind revie
 ## Why it fits the marketplace model
 
 - **Local-first**: certified Windows x64 and WSL2 x64 native runtimes, with macOS declared **compatible but untested**; no Cycle cloud service, account or telemetry;
-- **Standard surfaces only**: MCP server (stdio, protocol 2025-06-18, 36 tools), one skill (`cycle-delivery`), one command (`cycle`) — exactly the three extension points TRAE Work already supports;
+- **Standard surfaces only**: MCP server (stdio, protocol 2025-06-18, 37 tools), one skill (`cycle-delivery`), one command (`cycle`) — exactly the three extension points TRAE Work already supports;
 - **Distribution-ready**: GitHub releases with SHA256SUMS, CycloneDX SBOM, provenance manifest and signed build attestations; the listing manifest draft is in this repository (`marketplace/manifest.json`).
 
 ## Quality evidence
 
 - Certification report (Windows x64): autonomous quick and full cycles, repair path, all tools, concurrent projects — green;
 - 500k-file code-intelligence benchmark: 0 parse errors, incremental refresh 35 s, peak memory 308 MB;
-- CI on Windows and Linux: format, clippy `-D warnings`, 279 tests;
+- Current Windows evidence: format, clippy `-D warnings`, 284 tests; the WSL result remains a mandatory release-candidate gate;
 - Security posture documented in `documentation/THREAT_MODEL.md`; secrets are referenced via environment variables or files and never stored or logged.
 
 ## Licensing
@@ -43,6 +43,10 @@ Today the plugin registers through three manual steps (MCP JSON, skill folder, c
 2. marketplace support for a local binary command with per-user paths.
 
 Both are fully automatable from our release pipeline; no product changes are required on our side.
+
+## Data flow disclosure
+
+The control plane, state and command runner are local and Cycle operates no cloud service. The four user-configured read-only role endpoints may be local or cloud-hosted; when cloud-hosted they receive the bounded request/candidate context needed for their role. Project verification commands run with the local user's privileges only after the exact command is preapproved or explicitly consented.
 
 ## Links
 

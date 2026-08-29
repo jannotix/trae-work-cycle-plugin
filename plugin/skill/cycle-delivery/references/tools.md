@@ -25,6 +25,7 @@ All operations are exposed by the `trae-cycle` MCP server. The schema returned b
 | `cycle_execution_report` | Reports execution outcome. Arguments: `project_key`, `workflow_id`, `outcome` (`blocked` \| `plan_defect`). |
 | `cycle_freeze` **job** | Plans verification and freezes the exact candidate. Arguments: `project_key`, `workflow_id`, `base_revision` (40-character Git revision). Requires a clean worktree. |
 | `cycle_verify` **job** | Runs the verification plan over the frozen candidate. Arguments: `project_key`, `workflow_id`, `candidate_id`, `plan_id`, optional `attestations` (managed browser attestations). |
+| `cycle_consent` | Grants one 15-minute, single-use project-command consent returned by `cycle_verify`. Requires the exact `project_key`, `workflow_id`, `candidate_id`, `plan_id`, `consent_token`, `confirm: true`, and explicit user approval of the displayed command. |
 | `cycle_review` | Submits one independent review verdict. Arguments: `project_key`, `workflow_id`, `candidate_id`, `verdict` (ReviewVerdict object). |
 | `cycle_arbitrate` **job** | Submits the final arbiter verdict. Arguments: `project_key`, `workflow_id`, `candidate_id`, `verdict` (ArbiterVerdict object). |
 | `cycle_promote` **job** | Delivers the approved exact bytes into the project directory. Arguments: `project_key`, `workflow_id`, `candidate_id`, `project_directory`. |

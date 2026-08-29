@@ -175,6 +175,26 @@ pub fn descriptors() -> Vec<Value> {
             &["project_key", "workflow_id", "candidate_id", "plan_id"],
         ),
         tool(
+            "cycle_consent",
+            "Grant one expiring, single-use verification-command consent. Call only after cycle_verify returns the exact token and the user explicitly approves that command.",
+            json!({
+                "candidate_id": {"type": "string"},
+                "confirm": {"type": "boolean"},
+                "consent_token": {"type": "string", "minLength": 64, "maxLength": 64, "pattern": "^[0-9a-f]{64}$"},
+                "plan_id": {"type": "string"},
+                "project_key": project_key(),
+                "workflow_id": workflow_id(),
+            }),
+            &[
+                "project_key",
+                "workflow_id",
+                "candidate_id",
+                "plan_id",
+                "consent_token",
+                "confirm",
+            ],
+        ),
+        tool(
             "cycle_review",
             "Submit one independent review verdict bound to the frozen candidate.",
             json!({
@@ -434,6 +454,7 @@ pub async fn call(ctx: &ToolContext, name: &str, args: &Value) -> Result<Value, 
         "cycle_execution_report" => execution_report(ctx, args).await,
         "cycle_freeze" => freeze(ctx, args).await,
         "cycle_verify" => verify(ctx, args).await,
+        "cycle_consent" => consent(ctx, args).await,
         "cycle_review" => review(ctx, args).await,
         "cycle_arbitrate" => arbitrate(ctx, args).await,
         "cycle_promote" => promote(ctx, args).await,
@@ -925,10 +946,50 @@ async fn verify(ctx: &ToolContext, args: &Value) -> Result<Value, String> {
                 "mandatoryPassed": mandatory_passed,
                 "workflowState": workflow_state,
             })),
+            ServerMessage::VerificationConsentRequired {
+                candidate_id,
+                requests,
+                ..
+            } => Ok(json!({
+                "candidateId": candidate_id,
+                "consentRequired": requests,
+                "mandatoryPassed": false,
+                "workflowState": "verification",
+            })),
             _ => Err("control plane returned an unexpected verification response".to_owned()),
         }
     })
     .await)
+}
+
+async fn consent(ctx: &ToolContext, args: &Value) -> Result<Value, String> {
+    require_confirm(args)?;
+    let project_key = str_arg(args, "project_key")?;
+    let workflow_id = id_arg::<WorkflowId>(args, "workflow_id")?;
+    let candidate_id = id_arg::<CandidateId>(args, "candidate_id")?;
+    let plan_id = id_arg::<VerificationPlanId>(args, "plan_id")?;
+    let consent_token = id_arg::<ContentDigest>(args, "consent_token")?;
+    let message = ClientMessage::GrantVerificationConsent {
+        candidate_id,
+        consent_token,
+        plan_id,
+        project_key,
+        request_id: ctx.daemon.next_request_id(),
+        workflow_id,
+    };
+    match ctx.daemon.exchange(message).await? {
+        ServerMessage::VerificationConsentGranted {
+            expires_at_unix_millis,
+            ..
+        } => Ok(json!({
+            "candidateId": candidate_id,
+            "consentToken": consent_token,
+            "expiresAtUnixMillis": expires_at_unix_millis,
+            "singleUse": true,
+            "workflowId": workflow_id,
+        })),
+        _ => Err("control plane returned an unexpected consent response".to_owned()),
+    }
 }
 
 async fn review(ctx: &ToolContext, args: &Value) -> Result<Value, String> {
@@ -1466,13 +1527,13 @@ mod tests {
         sorted.sort();
         sorted.dedup();
         assert_eq!(names.len(), sorted.len());
-        assert_eq!(names.len(), 36);
+        assert_eq!(names.len(), 37);
     }
 
     #[tokio::test]
-    async fn cancel_and_export_refuse_without_confirmation() {
+    async fn confirmation_gated_tools_refuse_without_confirmation() {
         let context = context();
-        for tool in ["cycle_cancel", "cycle_export"] {
+        for tool in ["cycle_cancel", "cycle_consent", "cycle_export"] {
             let error = call(&context, tool, &json!({"project_key": "p"}))
                 .await
                 .unwrap_err();

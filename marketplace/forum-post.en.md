@@ -2,7 +2,7 @@
 
 ## What it is
 
-Cycle for Trae Work is a locally-run delivery governance plugin. It does not replace TRAE planning, browsing or review — it adds an evidence gate between "the agent says it's done" and "it is actually delivered". Open source (FSL-1.1-MIT, converts to MIT after two years). Fully local: no cloud, no account, no telemetry.
+Cycle for Trae Work is a locally-run delivery governance plugin. It does not replace TRAE planning, browsing or review — it adds an evidence gate between "the agent says it's done" and "it is actually delivered". Fair-source (FSL-1.1-MIT, converts to MIT after two years). The control plane, state and runner are local; Cycle has no cloud account or telemetry. User-configured role endpoints may be cloud-hosted and receive bounded request/candidate context.
 
 ## The problem it solves
 
@@ -17,6 +17,8 @@ Five isolated roles:
 5. **Arbiter** — final verdict over the user's **original request**, the candidate digest, the evidence and both reviews. The executor can never approve its own work.
 
 Key mechanics: immutable request (SHA-256 bound to every phase), candidate freeze (exact bytes/diff/modes; any post-freeze change invalidates evidence), real verification (the project's own commands, not the model's summary), exact-byte delivery via `cycle_promote`, bounded repair (5 cycles, then blocked; infrastructure failures never consume one), and a hash-chained audit ledger verifiable with `/cycle history verify`.
+
+Project commands are not silently trusted: shells and destructive/publish forms are rejected, and every nonpreapproved exact command needs an expiring, single-use user consent recorded in the ledger. Consent is not an operating-system sandbox; approve commands only for repositories you trust.
 
 Every role model is user-configured: four read-only roles on any OpenAI-compatible endpoint (cloud or local Ollama/LM Studio). Cycle never reads TRAE credentials.
 
@@ -39,9 +41,9 @@ Flow: architecture plan → execution in a managed worktree → real verificatio
 
 ## Certified numbers
 
-- Windows x64 certification: autonomous quick/full cycles, repair path, all 36 tools, concurrent projects — green;
-- 500k-file repository: 0 parse errors, 2.17M nodes / 1.7M edges, incremental refresh 35 s, peak memory 308 MB;
-- CI on Windows and Linux: fmt + clippy `-D warnings` + 279 tests green;
+- Windows x64 control-plane certification: autonomous quick/full cycles, consent path, repair path, all 37 tools, concurrent projects — green;
+- 500k-file repository characterization: 0 parse errors, 2.17M nodes / 1.7M edges, incremental refresh 35 s, peak memory 308 MB; the recorded cold-index run did not meet the 30-minute release gate and is being optimized before the next production release;
+- Current Windows evidence: fmt + clippy `-D warnings` + 284 tests green; WSL remains a mandatory release-candidate lane;
 - Releases ship SHA256SUMS, CycloneDX SBOM, provenance manifest and build attestations.
 
 ## Links

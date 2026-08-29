@@ -19,5 +19,5 @@ pub use frame::{FrameDecoder, FrameError, MAX_FRAME_BYTES, encode_frame};
 pub use protocol::{
     AdmissionOperation, ClientMessage, ControlOperation, ExecutionOutcome, GoalControlAction,
     GoalOperation, HealthReport, IpcRequest, IpcResponse, ManagedBrowserAttestation, ServerMessage,
-    VerificationEvidence,
+    VerificationConsentRequest, VerificationEvidence,
 };

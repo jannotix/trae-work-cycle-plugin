@@ -1,4 +1,5 @@
 use std::{
+    collections::BTreeSet,
     num::NonZeroUsize,
     path::{Path, PathBuf},
     sync::Arc,
@@ -434,6 +435,49 @@ where
                     }
                 }
             }
+            ClientMessage::GrantVerificationConsent {
+                candidate_id,
+                consent_token,
+                plan_id,
+                project_key,
+                request_id,
+                workflow_id,
+            } => {
+                let result = grant_verification_consent(
+                    Arc::clone(&store),
+                    Arc::clone(&checkpoint_key),
+                    Arc::clone(&worktrees),
+                    ConsentGrantRequest {
+                        candidate_id,
+                        consent_token,
+                        plan_id,
+                        project_key,
+                        workflow_id,
+                    },
+                )
+                .await;
+                match result {
+                    Ok(expires_at_unix_millis) => {
+                        channel
+                            .send(&ServerMessage::VerificationConsentGranted {
+                                consent_token,
+                                expires_at_unix_millis,
+                                request_id,
+                                workflow_id,
+                            })
+                            .await?;
+                    }
+                    Err(message) => {
+                        channel
+                            .send(&ServerMessage::Error {
+                                request_id: Some(request_id),
+                                code: "verification_consent_rejected".to_owned(),
+                                message,
+                            })
+                            .await?;
+                    }
+                }
+            }
             ClientMessage::History {
                 operation,
                 project_key,
@@ -826,7 +870,7 @@ where
                 )
                 .await;
                 match result {
-                    Ok((run, workflow_state)) => {
+                    Ok(VerificationAttempt::Completed(run, workflow_state)) => {
                         channel
                             .send(&ServerMessage::VerificationCompleted {
                                 candidate_id,
@@ -846,6 +890,16 @@ where
                                 request_id,
                                 workflow_id,
                                 workflow_state,
+                            })
+                            .await?;
+                    }
+                    Ok(VerificationAttempt::ConsentRequired(requests)) => {
+                        channel
+                            .send(&ServerMessage::VerificationConsentRequired {
+                                candidate_id,
+                                requests,
+                                request_id,
+                                workflow_id,
                             })
                             .await?;
                     }
@@ -1315,6 +1369,143 @@ async fn plan_verification(
     Ok(plan)
 }
 
+struct ConsentGrantRequest {
+    candidate_id: workflow_core::CandidateId,
+    consent_token: workflow_core::ContentDigest,
+    plan_id: workflow_core::VerificationPlanId,
+    project_key: String,
+    workflow_id: workflow_core::WorkflowId,
+}
+
+enum VerificationAttempt {
+    Completed(crate::verification::VerificationRun, String),
+    ConsentRequired(Vec<workflow_ipc::VerificationConsentRequest>),
+}
+
+async fn grant_verification_consent(
+    store: Arc<tokio::sync::Mutex<Store>>,
+    checkpoint_key: Arc<CheckpointKey>,
+    worktrees: Arc<PathBuf>,
+    request: ConsentGrantRequest,
+) -> Result<i64, String> {
+    let project_id = workflow_core::ProjectId::from_stable_key(&request.project_key);
+    let (plan, manifest) = {
+        let store = store.lock().await;
+        validate_project(&store, project_id, request.workflow_id)?;
+        let state = store
+            .load_workflow(request.workflow_id)
+            .map_err(|error| error.to_string())?
+            .ok_or_else(|| "workflow state does not exist".to_owned())?;
+        if state.state() != workflow_core::WorkflowState::Verification
+            || state.current_candidate() != Some(request.candidate_id)
+        {
+            return Err(
+                "workflow is not awaiting verification consent for this candidate".to_owned(),
+            );
+        }
+        let (plan_owner, plan) = store
+            .load_verification_plan(request.plan_id)
+            .map_err(|error| error.to_string())?
+            .ok_or_else(|| "verification plan does not exist".to_owned())?;
+        let candidate = store
+            .load_candidate(request.candidate_id)
+            .map_err(|error| error.to_string())?
+            .ok_or_else(|| "candidate does not exist".to_owned())?;
+        if plan_owner != request.workflow_id || candidate.workflow_id != request.workflow_id {
+            return Err("verification consent inputs belong to another workflow".to_owned());
+        }
+        (
+            serde_json::from_value::<crate::verification::VerificationPlan>(plan)
+                .map_err(|error| error.to_string())?,
+            candidate.manifest,
+        )
+    };
+    let path = worktrees
+        .join(project_id.to_string())
+        .join(request.workflow_id.to_string());
+    let requirements = crate::verification::required_consents(
+        &path,
+        &plan,
+        &manifest,
+        request.workflow_id,
+        request.candidate_id,
+    );
+    let requirement = requirements
+        .into_iter()
+        .find(|requirement| requirement.binding.token == request.consent_token)
+        .ok_or_else(|| {
+            "consent token does not match a pending command for this candidate".to_owned()
+        })?;
+    let now = now_unix_millis().map_err(|error| error.to_string())?;
+    let validity_millis = i64::try_from(requirement.request.validity_seconds)
+        .map_err(|_| "consent validity is outside the supported range".to_owned())?
+        .checked_mul(1_000)
+        .ok_or_else(|| "consent validity is outside the supported range".to_owned())?;
+    let expires_at_unix_millis = now
+        .checked_add(validity_millis)
+        .ok_or_else(|| "consent expiry is outside the supported range".to_owned())?;
+    let mut store = store.lock().await;
+    validate_project(&store, project_id, request.workflow_id)?;
+    store
+        .grant_verification_consent(
+            &requirement.binding,
+            expires_at_unix_millis,
+            workflow_core::WorkflowTimestamp::now(),
+        )
+        .map_err(|error| error.to_string())?;
+    let entry = crate::audit::record(
+        &mut store,
+        &checkpoint_key,
+        workflow_ipc::audit::AuditObservation {
+            actor_id: "user-confirmed-via-trae-work".to_owned(),
+            candidate_id: Some(request.candidate_id),
+            data: workflow_ipc::audit::AuditData::Permission {
+                decision: "granted".to_owned(),
+                permission: "verification_command".to_owned(),
+            },
+            evidence_ids: [requirement.binding.gate_id].into_iter().collect(),
+            files: manifest
+                .files()
+                .iter()
+                .map(|file| file.path.clone())
+                .collect(),
+            metadata: std::collections::BTreeMap::from([
+                (
+                    "command_digest".to_owned(),
+                    requirement.binding.command_digest.to_string(),
+                ),
+                (
+                    "consent_token".to_owned(),
+                    request.consent_token.to_string(),
+                ),
+                (
+                    "expires_at_unix_millis".to_owned(),
+                    expires_at_unix_millis.to_string(),
+                ),
+                (
+                    "working_directory_digest".to_owned(),
+                    requirement.binding.working_directory_digest.to_string(),
+                ),
+            ]),
+            model: None,
+            project_key: request.project_key,
+            role: None,
+            session_id: None,
+            task_id: None,
+            timestamp_unix_millis: now,
+            workflow_id: Some(request.workflow_id),
+        },
+    )
+    .map_err(|error| error.to_string())?;
+    if !store
+        .activate_verification_consent(request.consent_token, entry.hash)
+        .map_err(|error| error.to_string())?
+    {
+        return Err("verification consent could not be activated".to_owned());
+    }
+    Ok(expires_at_unix_millis)
+}
+
 struct VerificationRequest {
     attestations: Vec<workflow_ipc::ManagedBrowserAttestation>,
     candidate_id: workflow_core::CandidateId,
@@ -1328,7 +1519,7 @@ async fn verify_candidate(
     checkpoint_key: Arc<CheckpointKey>,
     worktrees: Arc<PathBuf>,
     request: VerificationRequest,
-) -> Result<(crate::verification::VerificationRun, String), String> {
+) -> Result<VerificationAttempt, String> {
     let project_id = workflow_core::ProjectId::from_stable_key(&request.project_key);
     let (plan, manifest, exact_diff, exact_files) = {
         let store = store.lock().await;
@@ -1368,13 +1559,50 @@ async fn verify_candidate(
     let path = worktrees
         .join(project_id.to_string())
         .join(request.workflow_id.to_string());
-    let run = crate::verification::run_with_attestations(
+    let requirements = crate::verification::required_consents(
+        &path,
+        &plan,
+        &manifest,
+        request.workflow_id,
+        request.candidate_id,
+    );
+    let consent_tokens: Vec<_> = requirements
+        .iter()
+        .map(|requirement| requirement.binding.token)
+        .collect();
+    if !consent_tokens.is_empty()
+        && !store
+            .lock()
+            .await
+            .claim_verification_consents(
+                request.workflow_id,
+                request.candidate_id,
+                request.plan_id,
+                &consent_tokens,
+                now_unix_millis().map_err(|error| error.to_string())?,
+                workflow_core::WorkflowTimestamp::now(),
+            )
+            .map_err(|error| error.to_string())?
+    {
+        return Ok(VerificationAttempt::ConsentRequired(
+            requirements
+                .into_iter()
+                .map(|requirement| requirement.request)
+                .collect(),
+        ));
+    }
+    let authorized_gate_ids: BTreeSet<_> = requirements
+        .iter()
+        .map(|requirement| requirement.binding.gate_id)
+        .collect();
+    let run = crate::verification::run_with_authorizations(
         &path,
         &plan,
         &manifest,
         &exact_diff,
         &exact_files,
         &request.attestations,
+        &authorized_gate_ids,
     )
     .await
     .map_err(|error| error.to_string())?;
@@ -1465,9 +1693,15 @@ async fn verify_candidate(
             workflow_core::WorkflowTimestamp::now(),
         )
         .map_err(|error| error.to_string())?;
-        return Ok((run, workflow_state(outcome.state)?));
+        return Ok(VerificationAttempt::Completed(
+            run,
+            workflow_state(outcome.state)?,
+        ));
     };
-    Ok((run, workflow_state(state.state())?))
+    Ok(VerificationAttempt::Completed(
+        run,
+        workflow_state(state.state())?,
+    ))
 }
 
 fn workflow_state(state: workflow_core::WorkflowState) -> Result<String, String> {
