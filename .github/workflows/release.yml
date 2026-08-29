@@ -57,7 +57,8 @@ jobs:
       - name: Lint
         run: cargo clippy --workspace --all-targets --all-features --locked -- -D warnings
       - name: Tests
-        run: cargo test --workspace --all-features --locked
+        shell: pwsh
+        run: ../tools/run-workspace-tests.ps1
       - name: Package contract
         shell: pwsh
         run: |
