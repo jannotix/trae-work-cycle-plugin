@@ -3,28 +3,100 @@ name: Release
 on:
   push:
     tags: ['v*']
+  workflow_dispatch:
 
 permissions:
-  contents: write
-  id-token: write
-  attestations: write
-  actions: read
+  contents: read
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
 
 env:
   CARGO_TERM_COLOR: always
 
 jobs:
+  context:
+    name: Exact release context
+    runs-on: ubuntu-24.04
+    outputs:
+      revision: ${{ steps.context.outputs.revision }}
+      source_tag: ${{ steps.context.outputs.source_tag }}
+      version: ${{ steps.context.outputs.version }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          fetch-depth: 0
+      - id: context
+        name: Require clean exact SHA and coherent version/tag
+        shell: pwsh
+        run: ./tools/release-context.ps1 -ExpectedSha '${{ github.sha }}' -RefName '${{ github.ref_name }}'
+
+  quality:
+    name: Quality (${{ matrix.os }})
+    needs: context
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-2025, ubuntu-24.04]
+    runs-on: ${{ matrix.os }}
+    defaults:
+      run:
+        working-directory: production
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: dtolnay/rust-toolchain@4360b52568e2003a75bf9bc1d59f33a8e3fc893c
+        with:
+          toolchain: 1.97.1
+          components: clippy, rustfmt
+      - uses: Swatinem/rust-cache@49a0bdc70d2e1b713ca9e2869b211fcce03d3c1c # v2
+        with:
+          workspaces: production
+      - name: Formatting
+        run: cargo fmt --all --check
+      - name: Lint
+        run: cargo clippy --workspace --all-targets --all-features --locked -- -D warnings
+      - name: Tests
+        run: cargo test --workspace --all-features --locked
+      - name: Package contract
+        shell: pwsh
+        run: |
+          ../tools/test-package-contract.ps1
+          ../tools/test-release-guards.ps1
+
+  security:
+    name: Dependency and license policy
+    needs: context
+    runs-on: ubuntu-24.04
+    defaults:
+      run:
+        working-directory: production
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: dtolnay/rust-toolchain@4360b52568e2003a75bf9bc1d59f33a8e3fc893c
+        with:
+          toolchain: 1.97.1
+      - uses: taiki-e/install-action@37f7c5781271959fb65b6b35224e28652ff2b63d # v2
+        with:
+          tool: cargo-deny@0.20.2,cargo-audit@0.22.2
+          fallback: none
+      - name: Deny advisories, bans, licenses, and unknown sources
+        run: cargo deny check
+      - name: Reject vulnerabilities, unmaintained, unsound, and yanked crates
+        run: cargo audit --deny warnings
+
   binaries:
-    name: Build ${{ matrix.name }}
+    name: Build and extract-smoke ${{ matrix.name }}
+    needs: context
     strategy:
       fail-fast: false
       matrix:
         include:
-          - os: windows-latest
+          - os: windows-2025
             name: windows-x64
             binary: trae-cycle.exe
             archive: trae-cycle-windows-x64.zip
-          - os: ubuntu-latest
+          - os: ubuntu-24.04
             name: wsl-x64
             binary: trae-cycle
             archive: trae-cycle-wsl-x64.tar.gz
@@ -33,66 +105,96 @@ jobs:
       run:
         working-directory: production
     steps:
-      - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@stable
-      - uses: Swatinem/rust-cache@v2
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: dtolnay/rust-toolchain@4360b52568e2003a75bf9bc1d59f33a8e3fc893c
+        with:
+          toolchain: 1.97.1
+      - uses: Swatinem/rust-cache@49a0bdc70d2e1b713ca9e2869b211fcce03d3c1c # v2
         with:
           workspaces: production
-      - name: Build release binary
+      - name: Build release binary from the lockfile
         run: cargo build --release --workspace --locked
       - name: Stage archive and smoke the extracted runtime
         shell: pwsh
-        run: ../tools/archive-runtime.ps1 -Binary "target/release/${{ matrix.binary }}" -Platform "${{ matrix.name }}" -Output "${{ github.workspace }}/${{ matrix.archive }}"
-      - uses: actions/upload-artifact@v4
+        run: ../tools/archive-runtime.ps1 -Binary 'target/release/${{ matrix.binary }}' -Platform '${{ matrix.name }}' -Output '${{ github.workspace }}/${{ matrix.archive }}'
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: trae-cycle-${{ matrix.name }}
           path: ${{ github.workspace }}/${{ matrix.archive }}
           if-no-files-found: error
 
-  package:
-    name: Package, attest, publish
-    needs: binaries
-    runs-on: ubuntu-latest
+  seal:
+    name: Seal and attest exact artifacts
+    needs: [context, quality, security, binaries]
+    runs-on: ubuntu-24.04
+    permissions:
+      actions: read
+      attestations: write
+      contents: read
+      id-token: write
     steps:
-      - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@stable
-      - uses: actions/download-artifact@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          fetch-depth: 0
+      - uses: dtolnay/rust-toolchain@4360b52568e2003a75bf9bc1d59f33a8e3fc893c
+        with:
+          toolchain: 1.97.1
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
         with:
           path: ${{ runner.temp }}/cycle-artifacts
           merge-multiple: true
-      - name: Package with allowlist
+      - name: Package from the clean exact revision
         shell: pwsh
         run: |
           $assets = @(
-            "${{ runner.temp }}/cycle-artifacts/trae-cycle-windows-x64.zip",
-            "${{ runner.temp }}/cycle-artifacts/trae-cycle-wsl-x64.tar.gz"
+            '${{ runner.temp }}/cycle-artifacts/trae-cycle-windows-x64.zip',
+            '${{ runner.temp }}/cycle-artifacts/trae-cycle-wsl-x64.tar.gz'
           )
           ./tools/package.ps1 -Assets $assets
           ./tools/test-package-contract.ps1 -Dist ./dist
-      - name: Verify provenance (manifest revision equals source revision)
-        shell: pwsh
-        run: ./tools/package.ps1 -Verify ./dist
-      - uses: actions/attest-build-provenance@v2
+          ./tools/scan-release-secrets.ps1 -Path ./dist
+          ./tools/package.ps1 -Verify ./dist -RequireReleaseInventory
+      - uses: actions/attest-build-provenance@96b4a1ef7235a096b17240c259729fdd70c83d45 # v2
         with:
-          subject-path: |
-            dist/*.zip
-            dist/*.tar.gz
-            dist/SBOM.cdx.json
-            dist/THIRD-PARTY-NOTICES.md
-      - name: Verify attestations
+          subject-path: dist/*
+      - name: Verify every attestation
         env:
           GH_TOKEN: ${{ github.token }}
+        shell: bash
         run: |
-          gh attestation verify dist/trae-work-cycle-plugin-*.zip --repo "${{ github.repository }}"
-          gh attestation verify dist/trae-cycle-windows-x64.zip --repo "${{ github.repository }}"
-      - name: Create release
-        uses: softprops/action-gh-release@v2
+          set -euo pipefail
+          for asset in dist/*; do
+            gh attestation verify "$asset" --repo "${{ github.repository }}"
+          done
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
-          generate-release-notes: true
-          files: |
-            dist/*.zip
-            dist/*.tar.gz
-            dist/SBOM.cdx.json
-            dist/THIRD-PARTY-NOTICES.md
-            dist/SHA256SUMS.txt
-            dist/MANIFEST.json
+          name: sealed-release-${{ needs.context.outputs.revision }}
+          path: dist/*
+          if-no-files-found: error
+          retention-days: 14
+
+  publish:
+    name: Publish approved sealed bytes
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: [context, seal]
+    runs-on: ubuntu-24.04
+    environment: production-release
+    permissions:
+      actions: read
+      contents: write
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          fetch-depth: 0
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          name: sealed-release-${{ needs.context.outputs.revision }}
+          path: dist
+      - name: Reverify sealed bytes before publication
+        shell: pwsh
+        run: ./tools/package.ps1 -Verify ./dist -RequireReleaseInventory
+      - uses: softprops/action-gh-release@3bb12739c298aeb8a4eeaf626c5b8d85266b0e65 # v2
+        with:
+          fail_on_unmatched_files: true
+          generate_release_notes: true
+          files: dist/*

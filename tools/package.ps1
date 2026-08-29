@@ -7,7 +7,9 @@ param(
     [Parameter(ParameterSetName = 'Package')]
     [string] $Output = '',
     [Parameter(Mandatory = $true, ParameterSetName = 'Verify')]
-    [string] $Verify
+    [string] $Verify,
+    [Parameter(ParameterSetName = 'Verify')]
+    [switch] $RequireReleaseInventory
 )
 
 $ErrorActionPreference = 'Stop'
@@ -115,9 +117,32 @@ function Copy-Allowlist(
 }
 
 function New-ZipFromStage([string] $Stage, [string] $ZipPath) {
-    Add-Type -AssemblyName System.IO.Compression.FileSystem
+    Add-Type -AssemblyName System.IO.Compression
     if (Test-Path $ZipPath) { Remove-Item $ZipPath }
-    [System.IO.Compression.ZipFile]::CreateFromDirectory($Stage, $ZipPath, [System.IO.Compression.CompressionLevel]::Optimal, $false)
+    $stream = [System.IO.File]::Open($ZipPath, [System.IO.FileMode]::CreateNew, [System.IO.FileAccess]::Write, [System.IO.FileShare]::None)
+    try {
+        $archive = [System.IO.Compression.ZipArchive]::new($stream, [System.IO.Compression.ZipArchiveMode]::Create, $true)
+        try {
+            $stamp = [DateTimeOffset]::new(1980, 1, 1, 0, 0, 0, [TimeSpan]::Zero)
+            foreach ($file in (Get-ChildItem -LiteralPath $Stage -Recurse -File | Sort-Object FullName)) {
+                $relative = [IO.Path]::GetRelativePath($Stage, $file.FullName).Replace('\', '/')
+                $entry = $archive.CreateEntry($relative, [System.IO.Compression.CompressionLevel]::Optimal)
+                $entry.LastWriteTime = $stamp
+                $input = $file.OpenRead()
+                $output = $entry.Open()
+                try {
+                    $input.CopyTo($output)
+                } finally {
+                    $output.Dispose()
+                    $input.Dispose()
+                }
+            }
+        } finally {
+            $archive.Dispose()
+        }
+    } finally {
+        $stream.Dispose()
+    }
 }
 
 function Assert-CleanRepository([string] $RepositoryRoot) {
@@ -127,6 +152,23 @@ function Assert-CleanRepository([string] $RepositoryRoot) {
         $summary = ($status | Select-Object -First 20) -join '; '
         throw "packaging requires an exact clean revision; dirty entries: $summary"
     }
+}
+
+function Get-SourceTimestamp([string] $RepositoryRoot) {
+    $value = (& git -C $RepositoryRoot show -s --format=%cI HEAD).Trim()
+    if ($LASTEXITCODE -ne 0 -or -not $value) { throw 'source commit timestamp is unavailable' }
+    ([DateTimeOffset]::Parse($value)).ToUniversalTime().ToString('yyyy-MM-ddTHH:mm:ssZ')
+}
+
+function ConvertTo-UtcTimestamp([object] $Value) {
+    if ($Value -is [DateTime]) {
+        return ([DateTimeOffset] $Value).ToUniversalTime().ToString('yyyy-MM-ddTHH:mm:ssZ')
+    }
+    ([DateTimeOffset]::Parse([string] $Value)).ToUniversalTime().ToString('yyyy-MM-ddTHH:mm:ssZ')
+}
+
+function Get-DeterministicUuid([string] $Revision) {
+    [Guid]::ParseExact($Revision.Substring(0, 32), 'N').ToString()
 }
 
 function Get-CargoMetadata([string] $ProductionRoot) {
@@ -158,7 +200,14 @@ function Test-LicenseGate($Metadata) {
     return $externals
 }
 
-function New-Sbom($Metadata, $Externals, [string] $Version, [string] $Revision, [string] $Path) {
+function New-Sbom(
+    $Metadata,
+    $Externals,
+    [string] $Version,
+    [string] $Revision,
+    [string] $SourceTimestamp,
+    [string] $Path
+) {
     $components = @()
     $seen = @{}
     foreach ($package in (@($Metadata.packages) | Sort-Object name, version)) {
@@ -184,10 +233,10 @@ function New-Sbom($Metadata, $Externals, [string] $Version, [string] $Revision, 
         '$schema'      = 'http://cyclonedx.org/schema/bom-1.5.schema.json'
         'bomFormat'    = 'CycloneDX'
         'specVersion'  = '1.5'
-        'serialNumber' = "urn:uuid:$([Guid]::NewGuid().ToString())"
+        'serialNumber' = "urn:uuid:$(Get-DeterministicUuid $Revision)"
         'version'      = 1
         'metadata'     = [ordered] @{
-            'timestamp' = (Get-Date).ToUniversalTime().ToString('yyyy-MM-ddTHH:mm:ssZ')
+            'timestamp' = $SourceTimestamp
             'component' = [ordered] @{
                 'type'    = 'application'
                 'name'    = $Product
@@ -229,12 +278,19 @@ function Read-WorkspaceVersion([string] $ProductionRoot) {
     $Matches[1]
 }
 
-function New-Manifest([object[]] $Artifacts, [string] $Version, [string] $Revision, [string] $Tag, [string] $Path) {
+function New-Manifest(
+    [object[]] $Artifacts,
+    [string] $Version,
+    [string] $Revision,
+    [string] $Tag,
+    [string] $SourceTimestamp,
+    [string] $Path
+) {
     $manifest = [ordered] @{
         'schemaVersion'  = 1
         'product'        = $Product
         'version'        = $Version
-        'createdUtc'     = (Get-Date).ToUniversalTime().ToString('yyyy-MM-ddTHH:mm:ssZ')
+        'createdUtc'     = $SourceTimestamp
         'sourceRevision' = $Revision
         'sourceTag'      = $Tag
         'artifacts'      = @($Artifacts | Sort-Object name | ForEach-Object {
@@ -248,22 +304,64 @@ $Root = (Resolve-Path $Root).Path
 Assert-CleanRepository $Root
 
 if ($PSCmdlet.ParameterSetName -eq 'Verify') {
+    $Verify = (Resolve-Path $Verify).Path
     $manifestPath = Join-Path $Verify 'MANIFEST.json'
     if (-not (Test-Path $manifestPath)) { throw "MANIFEST.json not found in $Verify" }
     $manifest = Get-Content $manifestPath -Raw | ConvertFrom-Json -AsHashtable
     $head = (& git -C $Root rev-parse HEAD).Trim()
-    if ($manifest['sourceRevision'] -ne $head) {
-        throw "revision mismatch: manifest $($manifest['sourceRevision']) vs source $head"
-    }
     $failures = @()
-    foreach ($artifact in $manifest['artifacts']) {
+    $version = Read-WorkspaceVersion (Join-Path $Root 'production')
+    $sourceTimestamp = Get-SourceTimestamp $Root
+    $sourceTag = (& git -C $Root describe --exact-match --tags HEAD 2>$null)
+    if ($LASTEXITCODE -ne 0 -or -not $sourceTag) { $sourceTag = '' } else { $sourceTag = $sourceTag.Trim() }
+    if ($manifest['schemaVersion'] -ne 1) { $failures += 'unsupported manifest schema version' }
+    if ($manifest['product'] -ne $Product) { $failures += "manifest product is $($manifest['product'])" }
+    if ($manifest['version'] -ne $version) { $failures += "manifest version $($manifest['version']) vs source $version" }
+    if ($manifest['sourceRevision'] -ne $head) { $failures += "revision mismatch: manifest $($manifest['sourceRevision']) vs source $head" }
+    if ($manifest['sourceTag'] -ne $sourceTag) { $failures += "tag mismatch: manifest $($manifest['sourceTag']) vs source $sourceTag" }
+    if ((ConvertTo-UtcTimestamp $manifest['createdUtc']) -ne $sourceTimestamp) { $failures += "manifest timestamp is not the source commit timestamp" }
+
+    $artifacts = @($manifest['artifacts'])
+    $names = @($artifacts | ForEach-Object { $_['name'] })
+    if (($names | Sort-Object -Unique).Count -ne $names.Count) { $failures += 'manifest contains duplicate artifact names' }
+    foreach ($artifact in $artifacts) {
         $path = Join-Path $Verify $artifact['name']
         if (-not (Test-Path $path)) { $failures += "missing artifact $($artifact['name'])"; continue }
+        $bytes = (Get-Item $path).Length
+        if ($bytes -ne $artifact['bytes']) { $failures += "byte length mismatch $($artifact['name'])" }
         $digest = Get-Sha256 $path
         if ($digest -ne $artifact['sha256']) { $failures += "digest mismatch $($artifact['name'])" }
     }
+
+    $sumsPath = Join-Path $Verify 'SHA256SUMS.txt'
+    if (-not (Test-Path $sumsPath)) {
+        $failures += 'missing SHA256SUMS.txt'
+    } else {
+        $expectedSums = ($artifacts | Sort-Object { $_['name'] } | ForEach-Object { "$($_['sha256'])  $($_['name'])" }) -join "`n"
+        $actualSums = [System.IO.File]::ReadAllText($sumsPath).TrimEnd("`r", "`n")
+        if ($actualSums -ne $expectedSums) { $failures += 'SHA256SUMS.txt does not match the manifest' }
+    }
+
+    $expectedFiles = @($names) + @('MANIFEST.json', 'SHA256SUMS.txt')
+    $actualFiles = @(Get-ChildItem -LiteralPath $Verify -File | ForEach-Object Name)
+    $extras = @($actualFiles | Where-Object { $_ -notin $expectedFiles })
+    if ($extras.Count -gt 0) { $failures += "unlisted release files: $($extras -join ', ')" }
+    if ($RequireReleaseInventory) {
+        $required = @(
+            "cycle-delivery-skill-$version.zip",
+            'SBOM.cdx.json',
+            'THIRD-PARTY-NOTICES.md',
+            'trae-cycle-windows-x64.zip',
+            'trae-cycle-wsl-x64.tar.gz',
+            "$Product-$version.zip"
+        )
+        $missing = @($required | Where-Object { $_ -notin $names })
+        if ($missing.Count -gt 0) { $failures += "release inventory is incomplete: $($missing -join ', ')" }
+        $unexpected = @($names | Where-Object { $_ -notin $required })
+        if ($unexpected.Count -gt 0) { $failures += "release inventory has unexpected artifacts: $($unexpected -join ', ')" }
+    }
     if ($failures.Count -gt 0) { $failures | ForEach-Object { Write-Error $_ }; throw 'verification failed' }
-    Write-Host "verified $($manifest['artifacts'].Count) artifacts at revision $head"
+    Write-Host "verified $($artifacts.Count) artifacts at revision $head"
     exit 0
 }
 
@@ -275,6 +373,7 @@ $version = Read-WorkspaceVersion $ProductionRoot
 $revision = (& git -C $Root rev-parse HEAD 2>$null)
 if (-not $revision -or $LASTEXITCODE -ne 0) { throw 'packaging requires a git repository (no revision)' }
 $revision = $revision.Trim()
+$sourceTimestamp = Get-SourceTimestamp $Root
 $tag = (& git -C $Root describe --exact-match --tags HEAD 2>$null)
 if ($LASTEXITCODE -ne 0 -or -not $tag) { $tag = $null } else { $tag = $tag.Trim() }
 
@@ -302,7 +401,7 @@ New-ZipFromStage $pluginStage $pluginZip
 Remove-Item $staging -Recurse -Force
 
 $sbomPath = Join-Path $dist 'SBOM.cdx.json'
-New-Sbom $metadata $externals $version $revision $sbomPath
+New-Sbom $metadata $externals $version $revision $sourceTimestamp $sbomPath
 
 $noticesPath = Join-Path $dist 'THIRD-PARTY-NOTICES.md'
 New-ThirdPartyNotices $externals $noticesPath $version
@@ -325,7 +424,7 @@ $artifacts = foreach ($name in $artifactNames) {
     [pscustomobject] @{ name = $name; sha256 = (Get-Sha256 $path); bytes = (Get-Item $path).Length }
 }
 $manifestPath = Join-Path $dist 'MANIFEST.json'
-New-Manifest $artifacts $version $revision $tag $manifestPath
+New-Manifest $artifacts $version $revision $tag $sourceTimestamp $manifestPath
 
 $sums = ($artifacts | Sort-Object name | ForEach-Object { "$($_.sha256)  $($_.name)" }) -join "`n"
 [System.IO.File]::WriteAllText((Join-Path $dist 'SHA256SUMS.txt'), $sums + "`n")

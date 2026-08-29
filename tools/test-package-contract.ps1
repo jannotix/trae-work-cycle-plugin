@@ -30,15 +30,26 @@ if ($Dist) {
     $distPath = (Resolve-Path $Dist).Path
     $version = [regex]::Match((Get-Content (Join-Path $Root 'production/Cargo.toml') -Raw), '(?s)\[workspace\.package\].*?version\s*=\s*"([^"]+)"').Groups[1].Value
     $skillArchive = Join-Path $distPath "cycle-delivery-skill-$version.zip"
+    $pluginArchive = Join-Path $distPath "trae-work-cycle-plugin-$version.zip"
     Assert-Contract (Test-Path $skillArchive) "skill archive is missing: $skillArchive"
+    Assert-Contract (Test-Path $pluginArchive) "plugin archive is missing: $pluginArchive"
+    Add-Type -AssemblyName System.IO.Compression.FileSystem
     if (Test-Path $skillArchive) {
-        Add-Type -AssemblyName System.IO.Compression.FileSystem
         $zip = [System.IO.Compression.ZipFile]::OpenRead($skillArchive)
         try {
             $entries = @($zip.Entries | ForEach-Object FullName)
             Assert-Contract ($entries -contains 'SKILL.md') 'skill archive does not contain root-level SKILL.md'
             Assert-Contract ($entries -contains 'references/tools.md') 'skill archive does not contain root-level references/tools.md'
             Assert-Contract (-not ($entries | Where-Object { $_ -like 'cycle-delivery/*' })) 'skill archive has an extra cycle-delivery directory'
+            Assert-Contract (-not ($zip.Entries | Where-Object { $_.LastWriteTime.DateTime -ne [DateTime]::new(1980, 1, 1, 0, 0, 0) })) 'skill archive timestamps are not deterministic'
+        } finally {
+            $zip.Dispose()
+        }
+    }
+    if (Test-Path $pluginArchive) {
+        $zip = [System.IO.Compression.ZipFile]::OpenRead($pluginArchive)
+        try {
+            Assert-Contract (-not ($zip.Entries | Where-Object { $_.LastWriteTime.DateTime -ne [DateTime]::new(1980, 1, 1, 0, 0, 0) })) 'plugin archive timestamps are not deterministic'
         } finally {
             $zip.Dispose()
         }
