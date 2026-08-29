@@ -8,14 +8,15 @@
     "sourceFiles": 500100
   },
   "graph": {
-    "contextBytes": 32521,
+    "bulkSecondaryIndexRebuild": true,
+    "contextBytes": 32499,
     "contextItems": 112,
     "edges": 1696005,
     "nodes": 2174361,
     "oracleRouteFound": true,
     "parseErrors": 0,
     "partitions": 501,
-    "queryNodes": 6
+    "queryNodes": 3
   },
   "hardware": {
     "cpu": "AMD Ryzen 5 3400G with Radeon Vega Graphics    ",
@@ -29,23 +30,23 @@
     "partitionGeneration": 2,
     "renamedFound": true
   },
-  "passed": false,
+  "passed": true,
   "resources": {
-    "availableDiskBytesAfter": 363318517760,
+    "availableDiskBytesAfter": 327316733952,
     "generatedBytes": 27817942,
-    "peakCpuPercent": 24.752476,
-    "peakMemoryBytes": 322957312,
-    "peakMemoryPercent": 2.160074604172157
+    "peakCpuPercent": 35.267857,
+    "peakMemoryBytes": 1075535872,
+    "peakMemoryPercent": 7.193637167079704
   },
   "schemaVersion": 1,
   "timingsMs": {
-    "generation": 549872,
-    "hashing": 2765992,
-    "incremental": 34904,
-    "inventoryAndIndex": 3130343,
-    "parsing": 170141,
-    "persistence": 3038297,
-    "query": 131,
-    "total": 3723366
+    "generation": 419782,
+    "hashing": 4437969,
+    "incremental": 46143,
+    "inventoryAndIndex": 949687,
+    "parsing": 186707,
+    "persistence": 686379,
+    "query": 271,
+    "total": 1418402
   }
 }

@@ -1,6 +1,6 @@
 # 500k Index Optimization Ledger
 
-Status: **best measured safe variant selected; full 500k run pending**
+Status: **full 500k gate passed on optimization commit; final release SHA rerun required**
 
 The release gate remains unchanged: more than 500,000 physical and inventoried
 files, 500,100 parsed source files, zero parse errors, correct query and
@@ -52,9 +52,26 @@ other readers never observe a committed schema without the indexes, and a
 rollback restores the prior indexes. Multi-row statements use at most 768 bind
 parameters, below SQLite's legacy 999-variable limit.
 
-## Remaining receipt
+## Full 500k receipt
 
-Run the unchanged full deterministic corpus on the clean optimization commit.
-The candidate is not release-ready unless its raw report contains
-`"passed": true`. The full benchmark must run again on the final sealed release
-SHA after every subsequent release-affecting change.
+The unchanged full deterministic corpus ran on clean commit
+`c9ff3ef61e436d44d48d8aaac91d423f4d93a66c` and exited 0. The raw report is
+`certification-500k.json`, SHA-256
+`a49e0df468572e92c919fe01624652f400d1a039833b1e354b4b318f9edd611d`.
+
+| Metric | Result |
+| --- | ---: |
+| Physical / inventoried / parsed files | 520,101 / 500,101 / 500,100 |
+| Parse errors | 0 |
+| Nodes / edges / partitions | 2,174,361 / 1,696,005 / 501 |
+| Generation | 419,782 ms |
+| Inventory and cold index | 949,687 ms |
+| Persistence (summed measured work) | 686,379 ms |
+| Incremental modify/rename/delete | 46,143 ms; all true |
+| Total gate time | **1,418,402 ms (23m 38.4s)** |
+| Peak memory | 1,075,535,872 bytes (7.19%) |
+| Verdict | **`passed: true`** |
+
+This receipt proves the optimization commit, not a later release. The full
+benchmark must run again on the final sealed release SHA after every subsequent
+release-affecting change.
