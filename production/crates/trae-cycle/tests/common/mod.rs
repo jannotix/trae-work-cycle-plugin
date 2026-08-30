@@ -138,20 +138,23 @@ pub fn spawn_daemon(data_dir: &std::path::Path) -> DaemonGuard {
             .spawn()
             .expect("daemon spawns"),
     );
-    wait_for_daemon(data_dir);
+    wait_for_daemon(data_dir, guard.0.id());
     guard
 }
 
-pub fn wait_for_daemon(data_dir: &std::path::Path) {
+pub fn wait_for_daemon(data_dir: &std::path::Path, expected_pid: u32) {
     let secret = data_dir.join("runtime").join("ipc.secret");
+    let pid_file = data_dir.join("runtime").join("workflowd.pid");
     let deadline = Instant::now() + Duration::from_secs(20);
     while Instant::now() < deadline {
-        if secret.is_file() {
+        let pid_matches = std::fs::read_to_string(&pid_file)
+            .is_ok_and(|pid| pid.trim() == expected_pid.to_string());
+        if secret.is_file() && pid_matches {
             return;
         }
         std::thread::sleep(Duration::from_millis(100));
     }
-    panic!("daemon did not create its IPC credential in time");
+    panic!("daemon did not publish its IPC credential and matching pid in time");
 }
 
 pub fn write_roles(data_dir: &std::path::Path, base_url: &str) {
