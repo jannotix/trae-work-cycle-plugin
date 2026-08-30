@@ -110,7 +110,7 @@ impl RolesClient {
         let (content, completion) = self
             .chat(
                 endpoint,
-                &api_key,
+                api_key.as_deref(),
                 prompts::advisory_prompt(operation),
                 request,
             )
@@ -144,7 +144,7 @@ impl RolesClient {
         let (content, completion) = self
             .chat(
                 endpoint,
-                &api_key,
+                api_key.as_deref(),
                 prompts::review_prompt(operation),
                 request,
             )
@@ -191,7 +191,7 @@ impl RolesClient {
         let (content, completion) = self
             .chat(
                 endpoint,
-                &api_key,
+                api_key.as_deref(),
                 prompts::arbiter_verdict_prompt(),
                 request,
             )
@@ -215,7 +215,7 @@ impl RolesClient {
     async fn chat(
         &self,
         endpoint: &RoleEndpoint,
-        api_key: &str,
+        api_key: Option<&str>,
         system: &str,
         request: &str,
     ) -> Result<(String, Option<CompletionUsage>), RoleError> {
@@ -231,10 +231,13 @@ impl RolesClient {
             "model": endpoint.model_id,
             "response_format": {"type": "json_object"},
         });
-        let response = self
-            .http
-            .post(url)
-            .bearer_auth(api_key)
+        let request = self.http.post(url);
+        let request = if let Some(api_key) = api_key {
+            request.bearer_auth(api_key)
+        } else {
+            request
+        };
+        let response = request
             .json(&body)
             .send()
             .await
@@ -268,7 +271,7 @@ fn endpoint_for<'a>(config: &'a RolesFile, role: &str) -> Result<&'a RoleEndpoin
         .ok_or_else(|| RoleError::Config(format!("role '{role}' has no configured endpoint")))
 }
 
-fn resolve_key(endpoint: &RoleEndpoint, data_dir: &Path) -> Result<String, RoleError> {
+fn resolve_key(endpoint: &RoleEndpoint, data_dir: &Path) -> Result<Option<String>, RoleError> {
     let raw = if let Some(name) = &endpoint.api_key_env {
         std::env::var(name)
             .map_err(|_| RoleError::Config(format!("environment variable {name} is not set")))?
@@ -276,6 +279,8 @@ fn resolve_key(endpoint: &RoleEndpoint, data_dir: &Path) -> Result<String, RoleE
         std::fs::read_to_string(data_dir.join(file)).map_err(|error| {
             RoleError::Config(format!("api key file {file} cannot be read: {error}"))
         })?
+    } else if endpoint.is_loopback() {
+        return Ok(None);
     } else {
         return Err(RoleError::Config(format!(
             "role endpoint for {} has no api key source",
@@ -286,7 +291,7 @@ fn resolve_key(endpoint: &RoleEndpoint, data_dir: &Path) -> Result<String, RoleE
     if key.is_empty() {
         return Err(RoleError::Config("api key is empty".to_owned()));
     }
-    Ok(key)
+    Ok(Some(key))
 }
 
 fn truncate(value: &str, limit: usize) -> String {

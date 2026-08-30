@@ -9,7 +9,7 @@ Version 1.0.0. Scope: the local product as shipped — MCP frontend, control-pla
 | Original request and delivered candidate bytes | Immutable from intake; SHA-256 digest bound to every review, evidence record and verdict |
 | Audit trail | Append-only hash chain with periodic Ed25519-signed checkpoints; local verification (`cycle_history_verify`) |
 | Ledger signing key | Generated locally (`runtime/ledger.key`); never leaves the data directory |
-| Role API keys | Referenced, never stored: `api_key_env` / `api_key_file` in `roles.json`; read at call time, redacted in every output, excluded from logs, ledger and exports |
+| Role API keys | Referenced, never stored: `api_key_env` / `api_key_file` in `roles.json`; read at call time, redacted in every output, excluded from logs, ledger and exports. Authentication may be omitted only for loopback role endpoints; every non-loopback endpoint requires an explicit key source |
 | Project repositories | All execution happens in a managed worktree; delivery writes exact approved bytes only |
 | Control-plane database | SQLite WAL in the data directory; consistent backups via `trae-cycle backup` |
 

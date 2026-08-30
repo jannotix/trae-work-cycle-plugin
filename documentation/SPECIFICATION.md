@@ -113,7 +113,7 @@ All role models are user-configured in `roles.json` inside the Cycle data direct
 Contract:
 
 1. `api_format` is `openai_compatible` in v1. Any OpenAI-compatible endpoint works, including local aggregation gateways.
-2. Credentials resolve from `api_key_env` (environment variable name) or `api_key_file` (path relative to the data directory, 0600 on Unix). Secrets are never written into `roles.json`, logs, the ledger or tool output.
+2. Credentials resolve from `api_key_env` (environment variable name) or `api_key_file` (path relative to the data directory, 0600 on Unix). Authentication may be omitted only when the endpoint host is loopback (`localhost`, `127.0.0.0/8` or `::1`); every non-loopback endpoint requires one key source. Secrets are never written into `roles.json`, logs, the ledger or tool output.
 3. The executor model is the model selected in Trae Work. Cycle never changes it; a mid-workflow change by the user is recorded in the audit trail at the next phase boundary.
 4. Effective assignments are inspected with `cycle_models`, which reports provider, model, endpoint host and key source, never key material.
 5. Missing read-only role configuration fails closed at `cycle_start` with the exact field to fix. `cycle_setup` and `cycle_doctor` validate the file and explain errors in plain language for non-experts.

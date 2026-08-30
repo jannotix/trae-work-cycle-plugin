@@ -164,6 +164,22 @@ fn setup_roles(directory: &Path, base_url: &str) -> RolesFile {
     serde_json::from_str(&text).expect("roles file parses")
 }
 
+fn setup_unauthenticated_roles(base_url: &str) -> RolesFile {
+    let roles = READ_ONLY_ROLES
+        .iter()
+        .map(|role| {
+            (
+                (*role).to_owned(),
+                json!({
+                    "base_url": base_url,
+                    "model_id": format!("provider/{role}"),
+                }),
+            )
+        })
+        .collect::<serde_json::Map<_, _>>();
+    serde_json::from_value(json!({"roles": roles, "version": 1})).expect("roles file parses")
+}
+
 fn approved_review(role: WorkflowRole) -> ReviewVerdict {
     ReviewVerdict {
         candidate_digest: ContentDigest::of(b"fixture-candidate"),
@@ -229,6 +245,35 @@ async fn advisory_call_returns_structured_output_and_records_usage() {
     let snapshot = ledger.snapshot().await;
     assert_eq!(snapshot["calls"], 1);
     assert_eq!(snapshot["entries"][0]["totalTokens"], 18);
+}
+
+#[tokio::test]
+async fn loopback_advisory_call_omits_authorization_header() {
+    let directory = tempfile::tempdir().unwrap();
+    let fake = start_fake(vec![Script::ok(
+        json!({"open_questions": [], "points": [], "risks": [], "summary": "local"}),
+        None,
+    )]);
+    let config = setup_unauthenticated_roles(&fake.base_url);
+    assert!(config.validate(directory.path()).is_ok());
+    let client = RolesClient::new(Duration::from_millis(500));
+
+    client
+        .consult(
+            &config,
+            directory.path(),
+            RoleOperation::ArchitectConsult,
+            "local endpoint",
+            &UsageLedger::new(),
+        )
+        .await
+        .expect("unauthenticated loopback advisory call");
+
+    let request = fake
+        .requests
+        .recv_timeout(Duration::from_secs(5))
+        .expect("captured request");
+    assert_eq!(request.authorization, None);
 }
 
 #[tokio::test]

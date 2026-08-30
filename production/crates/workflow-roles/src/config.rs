@@ -149,7 +149,10 @@ impl RoleEndpoint {
             issues.push(format!("role '{role}': model_id must not be empty"));
         }
         match (&self.api_key_env, &self.api_key_file) {
-            (None, None) => issues.push(format!("role '{role}': set api_key_env or api_key_file")),
+            (None, None) if !self.is_loopback() => issues.push(format!(
+                "role '{role}': remote endpoints require api_key_env or api_key_file"
+            )),
+            (None, None) => {}
             (Some(_), Some(_)) => issues.push(format!(
                 "role '{role}': api_key_env and api_key_file are mutually exclusive"
             )),
@@ -176,12 +179,38 @@ impl RoleEndpoint {
 
     #[must_use]
     pub fn base_url_host(&self) -> Option<String> {
-        let rest = self
-            .base_url
-            .strip_prefix("https://")
-            .or_else(|| self.base_url.strip_prefix("http://"))?;
-        let host = rest.split(['/', '?']).next().unwrap_or_default();
-        (!host.is_empty()).then(|| host.to_owned())
+        let url = self.parsed_base_url()?;
+        let host = url.host_str()?;
+        let host = host
+            .strip_prefix('[')
+            .and_then(|host| host.strip_suffix(']'))
+            .unwrap_or(host);
+        Some(match url.port() {
+            Some(port) if host.contains(':') => format!("[{host}]:{port}"),
+            Some(port) => format!("{host}:{port}"),
+            None if host.contains(':') => format!("[{host}]"),
+            None => host.to_owned(),
+        })
+    }
+
+    pub(crate) fn is_loopback(&self) -> bool {
+        self.parsed_base_url()
+            .and_then(|url| url.host_str().map(str::to_owned))
+            .is_some_and(|host| {
+                let address = host
+                    .strip_prefix('[')
+                    .and_then(|host| host.strip_suffix(']'))
+                    .unwrap_or(&host);
+                address.eq_ignore_ascii_case("localhost")
+                    || address
+                        .parse::<std::net::IpAddr>()
+                        .is_ok_and(|address| address.is_loopback())
+            })
+    }
+
+    fn parsed_base_url(&self) -> Option<reqwest::Url> {
+        let url = reqwest::Url::parse(&self.base_url).ok()?;
+        matches!(url.scheme(), "http" | "https").then_some(url)
     }
 
     #[must_use]
@@ -256,12 +285,29 @@ mod tests {
     }
 
     #[test]
-    fn missing_role_and_key_source_are_reported() {
+    fn remote_endpoints_without_key_sources_are_rejected() {
         let directory = tempfile::tempdir().unwrap();
         let file = file_json(None, None);
         let issues = file.validate(directory.path()).unwrap_err();
         assert!(issues.len() == READ_ONLY_ROLES.len());
         assert!(issues.iter().all(|issue| issue.contains("api_key")));
+    }
+
+    #[test]
+    fn loopback_endpoints_allow_omitted_authentication() {
+        let directory = tempfile::tempdir().unwrap();
+        for base_url in [
+            "http://localhost:11434/v1",
+            "http://127.42.0.1:11434/v1",
+            "http://[::1]:11434/v1",
+        ] {
+            let mut value = serde_json::to_value(file_json(None, None)).unwrap();
+            for role in READ_ONLY_ROLES {
+                value["roles"].get_mut(role).unwrap()["base_url"] = json!(base_url);
+            }
+            let file: RolesFile = serde_json::from_value(value).unwrap();
+            assert!(file.validate(directory.path()).is_ok(), "{base_url}");
+        }
     }
 
     #[test]
