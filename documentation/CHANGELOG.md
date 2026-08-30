@@ -1,5 +1,25 @@
 # Changelog
 
+## 1.0.1 (Unreleased)
+
+### Added
+
+- Expiring, single-use verification-command consent bound to the workflow, frozen candidate, plan, gate, command vector, and worktree, with activation recorded in the audit ledger before execution.
+- Deterministic extracted-archive smoke tests, root-level Skill packaging, Windows Authenticode signing and timestamp gates, complete runtime license material, public security/privacy/support policies, and a fail-closed marketplace submission kit.
+
+### Changed
+
+- Windows installs use the no-space executable path `%LOCALAPPDATA%\TraeCycle\bin\trae-cycle.exe`; WSL uses the native `trae-cycle-wsl-x64.tar.gz` artifact with mode `0755`.
+- Release automation is pinned, locked, exact-SHA, clean-checkout, inventory-complete, approval-protected, and verifies every checksum and provenance attestation before publication.
+- Cold 500,100-source-file indexing now passes the unchanged 30-minute SLA while preserving zero parse errors, reconciliation correctness, and resource ceilings.
+- Loopback role endpoints may omit authentication without receiving a synthetic bearer token; every non-loopback endpoint still requires an environment-variable or file key source.
+- Windows and WSL certification wait for the daemon to publish both its IPC credential and matching PID before sending parallel workflow requests.
+
+### Security
+
+- Worktree isolation is explicitly not described as an operating-system sandbox. Nonpreapproved project commands cannot execute without an exact user consent receipt.
+- Marketing and privacy material now disclose every configured network role boundary and no longer describe the product as fully local when remote role endpoints are used.
+
 ## 1.0.0 (2026-08-24)
 
 ### Added

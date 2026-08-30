@@ -1,6 +1,6 @@
 # Cycle for Trae Work — Threat Model
 
-Version 1.0.0. Scope: the local product as shipped — MCP frontend, control-plane daemon, durable state, role calls. Trae Work itself and the user's model providers are out of scope except as trust boundaries.
+Version 1.0.1. Scope: the local product as shipped — MCP frontend, control-plane daemon, durable state, role calls. Trae Work itself and the user's model providers are out of scope except as trust boundaries.
 
 ## Assets
 

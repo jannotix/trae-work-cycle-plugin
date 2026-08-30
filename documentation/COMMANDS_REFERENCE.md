@@ -1,6 +1,6 @@
 # Cycle for Trae Work — Commands Reference
 
-Version 1.0.0. Two surfaces exist: the `/cycle` command inside Trae Work and the `cycle_*` MCP tools underneath. Users type commands; the skill and the command route to tools. The schema returned by `tools/list` is authoritative for arguments.
+Version 1.0.1. Two surfaces exist: the `/cycle` command inside Trae Work and the `cycle_*` MCP tools underneath. Users type commands; the skill and the command route to tools. The schema returned by `tools/list` is authoritative for arguments.
 
 ## Conventions
 

@@ -1774,7 +1774,7 @@ dependencies = [
 
 [[package]]
 name = "trae-cycle"
-version = "1.0.0"
+version = "1.0.1"
 dependencies = [
  "serde",
  "serde_json",
@@ -2515,7 +2515,7 @@ dependencies = [
 
 [[package]]
 name = "workflow-code-intel"
-version = "1.0.0"
+version = "1.0.1"
 dependencies = [
  "ignore",
  "notify",
@@ -2554,7 +2554,7 @@ dependencies = [
 
 [[package]]
 name = "workflow-core"
-version = "1.0.0"
+version = "1.0.1"
 dependencies = [
  "schemars",
  "serde",
@@ -2566,7 +2566,7 @@ dependencies = [
 
 [[package]]
 name = "workflow-ipc"
-version = "1.0.0"
+version = "1.0.1"
 dependencies = [
  "getrandom 0.4.3",
  "hmac",
@@ -2583,7 +2583,7 @@ dependencies = [
 
 [[package]]
 name = "workflow-ledger"
-version = "1.0.0"
+version = "1.0.1"
 dependencies = [
  "ed25519-dalek",
  "getrandom 0.4.3",
@@ -2596,7 +2596,7 @@ dependencies = [
 
 [[package]]
 name = "workflow-memory"
-version = "1.0.0"
+version = "1.0.1"
 dependencies = [
  "rusqlite",
  "serde",
@@ -2609,7 +2609,7 @@ dependencies = [
 
 [[package]]
 name = "workflow-roles"
-version = "1.0.0"
+version = "1.0.1"
 dependencies = [
  "reqwest",
  "serde",
@@ -2621,7 +2621,7 @@ dependencies = [
 
 [[package]]
 name = "workflow-store"
-version = "1.0.0"
+version = "1.0.1"
 dependencies = [
  "rusqlite",
  "serde",
@@ -2633,7 +2633,7 @@ dependencies = [
 
 [[package]]
 name = "workflowd"
-version = "1.0.0"
+version = "1.0.1"
 dependencies = [
  "cap-std",
  "getrandom 0.4.3",

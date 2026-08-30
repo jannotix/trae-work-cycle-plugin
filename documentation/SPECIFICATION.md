@@ -1,10 +1,10 @@
 # Cycle for Trae Work Design Specification
 
-Status: Implemented — released as 1.0.0 (all phases through §27 complete; exceptions recorded in CERTIFICATION.md)
+Status: Implemented — 1.0.1 production release candidate (publication remains gated by the production release plan)
 Licensor & Author: Gianluca Iannotta
 License: FSL-1.1-MIT (MIT conversion after two years)
 Repository: https://github.com/jannotix/trae-work-cycle-plugin
-Target version: 1.0.0
+Target version: 1.0.1
 Certified platforms: Windows x64 Desktop, Linux x64 Desktop (Trae Work local environment)
 
 ## 1. Problem Statement

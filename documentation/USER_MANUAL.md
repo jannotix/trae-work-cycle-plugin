@@ -1,6 +1,6 @@
 # Cycle for Trae Work — User Manual
 
-Version 1.0.0. The control plane, state and verification runner are local; Cycle has no account, cloud service or telemetry. User-configured role endpoints may be cloud services and receive the bounded candidate/request material required for their role.
+Version 1.0.1. The control plane, state and verification runner are local; Cycle has no account, cloud service or telemetry. User-configured role endpoints may be cloud services and receive the bounded candidate/request material required for their role.
 
 ## 1. Requirements
 
