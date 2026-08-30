@@ -82,9 +82,14 @@ if ($Dist) {
         $entries = @($entries | ForEach-Object { $_ -replace '^\./', '' })
         $expected = @('trae-cycle') + $runtimeMaterials
         Assert-Contract ($null -eq (Compare-Object ($entries | Sort-Object) ($expected | Sort-Object))) 'WSL runtime archive inventory is not exact'
-        $modeLine = @(& tar -tvzf $wslArchive) | Where-Object { $_ -match '(?:^|/)trae-cycle$' }
+        $verbose = @(& tar -tvzf $wslArchive)
         Assert-Contract ($LASTEXITCODE -eq 0) 'WSL runtime archive modes cannot be listed'
+        $modeLine = @($verbose | Where-Object { $_ -match '\s+(?:.*/)?trae-cycle$' })
         Assert-Contract ($modeLine.Count -eq 1 -and $modeLine[0] -match '^-rwxr-xr-x') 'WSL runtime executable mode is not 0755'
+        foreach ($material in $runtimeMaterials) {
+            $materialLine = @($verbose | Where-Object { $_ -match "\s+(?:.*/)?$([regex]::Escape($material))$" })
+            Assert-Contract ($materialLine.Count -eq 1 -and $materialLine[0] -match '^-rw-r--r--') "WSL runtime material mode is not 0644: $material"
+        }
     }
 }
 

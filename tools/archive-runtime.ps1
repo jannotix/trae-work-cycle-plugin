@@ -105,6 +105,8 @@ try {
         if ($IsWindows) { throw 'the WSL runtime archive must be built on a Linux runner' }
         $stagedBinary = Join-Path $stage 'trae-cycle'
         Copy-Item -LiteralPath $binaryPath -Destination $stagedBinary
+        & chmod 644 (Join-Path $stage 'LICENSE') (Join-Path $stage 'NOTICE') (Join-Path $stage 'README.md') (Join-Path $stage 'THIRD-PARTY-NOTICES.md')
+        if ($LASTEXITCODE -ne 0) { throw 'failed to set WSL runtime document modes' }
         & chmod 755 $stagedBinary
         if ($LASTEXITCODE -ne 0) { throw 'failed to mark the WSL runtime executable' }
         & tar --sort=name '--mtime=@0' --owner=0 --group=0 --numeric-owner -C $stage -czf $outputPath 'LICENSE' 'NOTICE' 'README.md' 'THIRD-PARTY-NOTICES.md' 'trae-cycle'
