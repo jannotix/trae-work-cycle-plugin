@@ -10,6 +10,9 @@
   "repository": "https://github.com/jannotix/trae-work-cycle-plugin",
   "homepage": "https://github.com/jannotix/trae-work-cycle-plugin",
   "license": "FSL-1.1-MIT",
+  "security": "https://github.com/jannotix/trae-work-cycle-plugin/blob/main/SECURITY.md",
+  "privacy": "https://github.com/jannotix/trae-work-cycle-plugin/blob/main/PRIVACY.md",
+  "support": "https://github.com/jannotix/trae-work-cycle-plugin/blob/main/SUPPORT.md",
   "keywords": [
     "delivery",
     "code-review",
@@ -36,6 +39,17 @@
     "skill": "cycle-delivery",
     "command": "cycle"
   },
+  "permissions": {
+    "filesystem": "Selected repositories, managed worktrees, and the configured per-user Cycle data directory",
+    "process": "Exact project verification commands after narrow policy approval or an expiring single-use user consent receipt",
+    "network": "Trae Work's selected executor model, user-configured role endpoints, and user-approved project or browser operations",
+    "git": "Read repository state, create managed worktrees, freeze candidates, and promote only approved exact bytes"
+  },
+  "dataFlow": {
+    "local": ["control-plane database", "audit ledger", "managed worktrees", "code-intelligence index", "role configuration"],
+    "external": ["Trae Work executor model", "user-configured architect/reviewer/arbiter endpoints", "user-approved commands and browser destinations"]
+  },
+  "installRecipe": "marketplace/install-recipe.md",
   "releaseAssets": {
     "windows-x64": "trae-cycle-windows-x64.zip",
     "wsl-x64": "trae-cycle-wsl-x64.tar.gz"

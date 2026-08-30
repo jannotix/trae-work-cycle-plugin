@@ -39,6 +39,9 @@ $PluginAllowlist = @(
     'PRIVACY.md',
     'SUPPORT.md',
     'marketplace/logo.svg',
+    'marketplace/manifest.json',
+    'marketplace/install-recipe.md',
+    'marketplace/SUBMISSION_CHECKLIST.md',
     'plugin/command/cycle.md',
     'plugin/install/mcp.example.json'
 ) + $SkillAllowlist
