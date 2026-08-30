@@ -1,6 +1,7 @@
 ---
 name: cycle-delivery
 description: Governs evidence-gated software delivery through the local Cycle control plane. Use when the user wants a change shipped as complete, tested, working software; when any /cycle command is invoked or a Cycle workflow, review, arbitration or goal is mentioned; when a workflow is active and its next phase must run; or when the user asks to consult the architect, a reviewer or the arbiter alone. Not for quick ungoverned edits or plain questions.
+license: FSL-1.1-MIT
 ---
 
 # Cycle Delivery

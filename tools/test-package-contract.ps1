@@ -20,11 +20,17 @@ Assert-Contract ($command -notmatch '\s') "MCP command path contains whitespace:
 
 $readme = Get-Content (Join-Path $Root 'README.md') -Raw
 $manual = Get-Content (Join-Path $Root 'documentation/USER_MANUAL.md') -Raw
+$skill = Get-Content (Join-Path $Root 'plugin/skill/cycle-delivery/SKILL.md') -Raw
 Assert-Contract ($readme -notmatch '%LOCALAPPDATA%\\Trae Cycle\\bin') 'README uses a Windows executable path with spaces'
 Assert-Contract ($manual -notmatch '%LOCALAPPDATA%\\Trae Cycle\\bin') 'User manual uses a Windows executable path with spaces'
 Assert-Contract ($readme -match 'Windows x64') 'README does not name the Windows v1 lane'
 Assert-Contract ($readme -match 'WSL') 'README does not name the WSL v1 lane'
 Assert-Contract ($readme -match 'compatible but untested') 'README does not label macOS compatible but untested'
+Assert-Contract ($skill -match '(?m)^license:\s*FSL-1\.1-MIT\s*$') 'Skill frontmatter does not declare its license'
+foreach ($policy in @('SECURITY.md', 'PRIVACY.md', 'SUPPORT.md')) {
+    Assert-Contract (Test-Path (Join-Path $Root $policy)) "$policy is missing"
+    Assert-Contract ($readme -match [regex]::Escape("($policy)")) "README does not link $policy"
+}
 
 if ($Dist) {
     $distPath = (Resolve-Path $Dist).Path
@@ -39,6 +45,8 @@ if ($Dist) {
         try {
             $entries = @($zip.Entries | ForEach-Object FullName)
             Assert-Contract ($entries -contains 'SKILL.md') 'skill archive does not contain root-level SKILL.md'
+            Assert-Contract ($entries -contains 'LICENSE') 'skill archive does not contain its root-level license'
+            Assert-Contract ($entries -contains 'NOTICE') 'skill archive does not contain its root-level notice'
             Assert-Contract ($entries -contains 'references/tools.md') 'skill archive does not contain root-level references/tools.md'
             Assert-Contract (-not ($entries | Where-Object { $_ -like 'cycle-delivery/*' })) 'skill archive has an extra cycle-delivery directory'
             Assert-Contract (-not ($zip.Entries | Where-Object { $_.LastWriteTime.DateTime -ne [DateTime]::new(1980, 1, 1, 0, 0, 0) })) 'skill archive timestamps are not deterministic'

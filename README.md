@@ -8,7 +8,7 @@ Cycle for Trae Work is a native Trae Work integration for evidence-gated softwar
 
 ## What it is
 
-A local Trae Work integration that coordinates five isolated roles:
+A locally operated Trae Work integration that coordinates five isolated roles:
 
 1. **Architect** — turns the original request into a bounded, verifiable task plan.
 2. **Executor** — implements one authorized scope at a time inside the Trae Work session.
@@ -16,7 +16,7 @@ A local Trae Work integration that coordinates five isolated roles:
 4. **Security and architecture reviewer** — independently checks trust boundaries and architecture.
 5. **Arbiter** — approves or rejects by comparing the original user request, the exact candidate, raw evidence and both reviews. The executor cannot approve its own work.
 
-There is no separate dashboard, cloud account or extra UI. Everything runs inside Trae Work through a local control plane.
+There is no separate dashboard, Cycle cloud account or extra UI. The control plane and durable state run locally; the executor uses Trae Work, and the four read-only roles send phase-specific material to the endpoints configured by the user. See the privacy disclosure before using a network endpoint.
 
 ## What it solves
 
@@ -69,6 +69,9 @@ The user manual and command reference cover modes, role consultations, goals, re
 | [Design specification](documentation/SPECIFICATION.md) | Architecture, workflow lifecycle, gates, acceptance criteria |
 | [Certification report](documentation/CERTIFICATION.md) | Windows x64 certification runs and 500k-file benchmark |
 | [Threat model](documentation/THREAT_MODEL.md) | Assets, actors, attack surface, mitigations |
+| [Security policy](SECURITY.md) | Supported versions, private reporting, security boundaries |
+| [Privacy and data flow](PRIVACY.md) | Local retention and every external transmission boundary |
+| [Support and updates](SUPPORT.md) | Supported platforms, diagnostics, safe update and rollback |
 | [Roadmap](documentation/ROADMAP.md) | Direction after 1.0 |
 
 ## License

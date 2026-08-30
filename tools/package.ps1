@@ -33,6 +33,9 @@ $PluginAllowlist = @(
     'README.md',
     'LICENSE',
     'NOTICE',
+    'SECURITY.md',
+    'PRIVACY.md',
+    'SUPPORT.md',
     'marketplace/logo.svg',
     'plugin/command/cycle.md',
     'plugin/install/mcp.example.json'
@@ -389,6 +392,8 @@ if (Test-Path $staging) { Remove-Item $staging -Recurse -Force }
 $skillStage = Join-Path $staging 'skill'
 New-Item -ItemType Directory -Path $skillStage | Out-Null
 Copy-Allowlist -Allowlist $SkillAllowlist -SourceRoot $Root -Stage $skillStage -SkillAtRoot
+Copy-Item (Join-Path $Root 'LICENSE') (Join-Path $skillStage 'LICENSE')
+Copy-Item (Join-Path $Root 'NOTICE') (Join-Path $skillStage 'NOTICE')
 $skillZip = Join-Path $dist "cycle-delivery-skill-$version.zip"
 New-ZipFromStage $skillStage $skillZip
 
