@@ -61,7 +61,22 @@ if ($Dist) {
         $zip = [System.IO.Compression.ZipFile]::OpenRead($pluginArchive)
         try {
             $entries = @($zip.Entries | ForEach-Object FullName)
-            foreach ($entry in @('SECURITY.md', 'PRIVACY.md', 'SUPPORT.md', 'marketplace/manifest.json', 'marketplace/install-recipe.md', 'marketplace/SUBMISSION_CHECKLIST.md')) {
+            foreach ($entry in @(
+                    'SECURITY.md',
+                    'PRIVACY.md',
+                    'SUPPORT.md',
+                    'documentation/USER_MANUAL.md',
+                    'documentation/COMMANDS_REFERENCE.md',
+                    'documentation/SPECIFICATION.md',
+                    'documentation/CERTIFICATION_V1.0.1.md',
+                    'documentation/CERTIFICATION.md',
+                    'documentation/THREAT_MODEL.md',
+                    'documentation/ROADMAP.md',
+                    'documentation/CHANGELOG.md',
+                    'marketplace/manifest.json',
+                    'marketplace/install-recipe.md',
+                    'marketplace/SUBMISSION_CHECKLIST.md'
+                )) {
                 Assert-Contract ($entries -contains $entry) "plugin archive is missing $entry"
             }
             Assert-Contract (-not ($zip.Entries | Where-Object { $_.LastWriteTime.DateTime -ne [DateTime]::new(1980, 1, 1, 0, 0, 0) })) 'plugin archive timestamps are not deterministic'

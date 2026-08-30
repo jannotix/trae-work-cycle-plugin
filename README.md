@@ -67,7 +67,8 @@ The user manual and command reference cover modes, role consultations, goals, re
 | [User manual](documentation/USER_MANUAL.md) | Installation, model configuration, modes, goals, recovery, removal |
 | [Commands reference](documentation/COMMANDS_REFERENCE.md) | Every command and tool with behavior and boundaries |
 | [Design specification](documentation/SPECIFICATION.md) | Architecture, workflow lifecycle, gates, acceptance criteria |
-| [Certification report](documentation/CERTIFICATION.md) | Windows x64 certification runs and 500k-file benchmark |
+| [Current 1.0.1 certification matrix](documentation/CERTIFICATION_V1.0.1.md) | Exact revision, Windows/WSL evidence, UI rows and release blockers |
+| [Historical 1.0.0 certification](documentation/CERTIFICATION.md) | Earlier Windows control-plane and packaging evidence; not inherited by 1.0.1 |
 | [Threat model](documentation/THREAT_MODEL.md) | Assets, actors, attack surface, mitigations |
 | [Security policy](SECURITY.md) | Supported versions, private reporting, security boundaries |
 | [Privacy and data flow](PRIVACY.md) | Local retention and every external transmission boundary |

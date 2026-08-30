@@ -182,12 +182,14 @@ the product license, third-party notices, README, and its platform executable.
 | Task | State |
 | --- | --- |
 | T00 | Completed — `78a0de3` |
-| T01 | Implemented — `9e65034`; Windows extracted-archive smoke passed, WSL runner receipt pending |
-| T02 | Implemented — `67890d4`; policy, expiring single-use ledgered consent, runner boundary and MCP quick/full/repair/concurrency certification passed on Windows, WSL receipt pending |
-| T03 | Implemented — `a9a8726` plus release-branch CI trigger follow-up; pinned/locked quality and security gates, exact context, deterministic package, full inventory, secret scan, attest-all, approval-protected publish; remote release-candidate receipt pending |
+| T01 | Implemented — `9e65034` plus runtime-material/mode hardening; Windows extracted-archive smoke and deterministic replay passed, WSL ext4 archive/mode/smoke replay passed; final signed/exact-SHA pair pending |
+| T02 | Implemented — `67890d4` plus keyless-loopback correction `85d6afa`; policy, expiring single-use ledgered consent, runner boundary and MCP quick/full/repair/concurrency certification passed on Windows and WSL |
+| T03 | Implemented — `a9a8726` plus release/signing follow-ups; exact CI run 33286348988 passed Windows 2025, Ubuntu 24.04, RustSec, license and package contracts on `d5aa25b…`; tagless release-candidate workflow still requires default-branch integration and signing secrets |
 | T04 | Passed on `c9ff3ef`: raw receipt `passed: true`, total 1,418,402 ms, 0 parse errors; final sealed-SHA rerun remains mandatory |
-| T05 | In progress — Trae Work Desktop 0.1.54 pinned; deterministic localhost role endpoint ready; isolated install and UI matrix pending |
-| T06–T09 | Not started |
+| T05 | In progress — Trae Work Desktop 0.1.54 pinned; MCP, `cycle_consent`, Command, Skill `1.0.0`, fixture selection and initial setup path observed; `1.0.1` binary installed, but UI rerun/restart/update/uninstall is blocked by a competing Windows Computer Use request |
+| T06 | In progress — policies, license-bearing archives, private vulnerability reporting, signing script and approval environments complete; production Authenticode identity/secrets absent |
+| T07 | Prepared — manifest, permissions/data flow, install recipe, logo and checklist complete; external marketplace submission awaits final public assets and action-time owner confirmation |
+| T08–T09 | Blocked — final UI/signing receipts, final-SHA 500k rerun, sealed release candidate, publication approval and public verification remain mandatory |
 
 The existence of v1.0.0, a green unit suite, or a corrected plan does not change
 this release from `BLOCKED`.
