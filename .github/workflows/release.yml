@@ -86,22 +86,11 @@ jobs:
       - name: Reject vulnerabilities, unmaintained, unsound, and yanked crates
         run: cargo audit --deny warnings
 
-  binaries:
-    name: Build and extract-smoke ${{ matrix.name }}
+  windows-binary:
+    name: Build, sign, and extract-smoke windows-x64
     needs: context
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - os: windows-2025
-            name: windows-x64
-            binary: trae-cycle.exe
-            archive: trae-cycle-windows-x64.zip
-          - os: ubuntu-24.04
-            name: wsl-x64
-            binary: trae-cycle
-            archive: trae-cycle-wsl-x64.tar.gz
-    runs-on: ${{ matrix.os }}
+    runs-on: windows-2025
+    environment: windows-code-signing
     defaults:
       run:
         working-directory: production
@@ -116,7 +105,6 @@ jobs:
       - name: Build release binary from the lockfile
         run: cargo build --release --workspace --locked
       - name: Authenticode-sign and timestamp the Windows runtime
-        if: matrix.name == 'windows-x64'
         shell: pwsh
         env:
           CYCLE_WINDOWS_CERTIFICATE_BASE64: ${{ secrets.WINDOWS_CODE_SIGNING_CERTIFICATE_BASE64 }}
@@ -124,16 +112,42 @@ jobs:
         run: ../tools/sign-windows.ps1 -Binary 'target/release/trae-cycle.exe'
       - name: Stage archive and smoke the extracted runtime
         shell: pwsh
-        run: ../tools/archive-runtime.ps1 -Binary 'target/release/${{ matrix.binary }}' -Platform '${{ matrix.name }}' -Output '${{ github.workspace }}/${{ matrix.archive }}' -RequireAuthenticode:('${{ matrix.name }}' -eq 'windows-x64')
+        run: ../tools/archive-runtime.ps1 -Binary 'target/release/trae-cycle.exe' -Platform 'windows-x64' -Output '${{ github.workspace }}/trae-cycle-windows-x64.zip' -RequireAuthenticode
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
-          name: trae-cycle-${{ matrix.name }}
-          path: ${{ github.workspace }}/${{ matrix.archive }}
+          name: trae-cycle-windows-x64
+          path: ${{ github.workspace }}/trae-cycle-windows-x64.zip
+          if-no-files-found: error
+
+  wsl-binary:
+    name: Build and extract-smoke wsl-x64
+    needs: context
+    runs-on: ubuntu-24.04
+    defaults:
+      run:
+        working-directory: production
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: dtolnay/rust-toolchain@4360b52568e2003a75bf9bc1d59f33a8e3fc893c
+        with:
+          toolchain: 1.97.1
+      - uses: Swatinem/rust-cache@49a0bdc70d2e1b713ca9e2869b211fcce03d3c1c # v2
+        with:
+          workspaces: production
+      - name: Build release binary from the lockfile
+        run: cargo build --release --workspace --locked
+      - name: Stage archive and smoke the extracted runtime
+        shell: pwsh
+        run: ../tools/archive-runtime.ps1 -Binary 'target/release/trae-cycle' -Platform 'wsl-x64' -Output '${{ github.workspace }}/trae-cycle-wsl-x64.tar.gz'
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: trae-cycle-wsl-x64
+          path: ${{ github.workspace }}/trae-cycle-wsl-x64.tar.gz
           if-no-files-found: error
 
   seal:
     name: Seal and attest exact artifacts
-    needs: [context, quality, security, binaries]
+    needs: [context, quality, security, windows-binary, wsl-binary]
     runs-on: ubuntu-24.04
     permissions:
       actions: read

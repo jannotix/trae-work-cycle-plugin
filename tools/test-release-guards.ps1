@@ -29,7 +29,9 @@ try {
             'tools/sign-windows.ps1',
             'WINDOWS_CODE_SIGNING_CERTIFICATE_BASE64',
             'WINDOWS_CODE_SIGNING_CERTIFICATE_PASSWORD',
-            '-RequireAuthenticode'
+            '-RequireAuthenticode',
+            'environment: windows-code-signing',
+            'environment: production-release'
         )) {
         if ($workflow -notmatch [regex]::Escape($required)) {
             throw "release workflow is missing signing guard: $required"
