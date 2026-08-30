@@ -23,6 +23,24 @@ try {
         $rejected = $_.Exception.Message -match 'OpenAI-style API key|secret scan failed'
     }
     if (-not $rejected) { throw 'release secret scan accepted a seeded credential' }
+
+    $workflow = Get-Content (Join-Path $root '.github/workflows/release.yml') -Raw
+    foreach ($required in @(
+            'tools/sign-windows.ps1',
+            'WINDOWS_CODE_SIGNING_CERTIFICATE_BASE64',
+            'WINDOWS_CODE_SIGNING_CERTIFICATE_PASSWORD',
+            '-RequireAuthenticode'
+        )) {
+        if ($workflow -notmatch [regex]::Escape($required)) {
+            throw "release workflow is missing signing guard: $required"
+        }
+    }
+    $signer = Get-Content (Join-Path $root 'tools/sign-windows.ps1') -Raw
+    foreach ($required in @('/fd', 'SHA256', '/tr', '/td', 'verify', 'TimeStamperCertificate')) {
+        if ($signer -notmatch [regex]::Escape($required)) {
+            throw "Windows signing script is missing: $required"
+        }
+    }
     Write-Host 'release guard tests passed'
 } finally {
     if ((Test-Path -LiteralPath $fixture) -and $fixture.StartsWith($tempRoot, [StringComparison]::OrdinalIgnoreCase)) {

@@ -37,6 +37,9 @@ if ($Dist) {
     $version = [regex]::Match((Get-Content (Join-Path $Root 'production/Cargo.toml') -Raw), '(?s)\[workspace\.package\].*?version\s*=\s*"([^"]+)"').Groups[1].Value
     $skillArchive = Join-Path $distPath "cycle-delivery-skill-$version.zip"
     $pluginArchive = Join-Path $distPath "trae-work-cycle-plugin-$version.zip"
+    $windowsArchive = Join-Path $distPath 'trae-cycle-windows-x64.zip'
+    $wslArchive = Join-Path $distPath 'trae-cycle-wsl-x64.tar.gz'
+    $runtimeMaterials = @('LICENSE', 'NOTICE', 'README.md', 'THIRD-PARTY-NOTICES.md')
     Assert-Contract (Test-Path $skillArchive) "skill archive is missing: $skillArchive"
     Assert-Contract (Test-Path $pluginArchive) "plugin archive is missing: $pluginArchive"
     Add-Type -AssemblyName System.IO.Compression.FileSystem
@@ -61,6 +64,27 @@ if ($Dist) {
         } finally {
             $zip.Dispose()
         }
+    }
+    if (Test-Path $windowsArchive) {
+        $zip = [System.IO.Compression.ZipFile]::OpenRead($windowsArchive)
+        try {
+            $entries = @($zip.Entries | ForEach-Object FullName)
+            $expected = @('trae-cycle.exe') + $runtimeMaterials
+            Assert-Contract ($null -eq (Compare-Object ($entries | Sort-Object) ($expected | Sort-Object))) 'Windows runtime archive inventory is not exact'
+            Assert-Contract (-not ($zip.Entries | Where-Object { $_.LastWriteTime.DateTime -ne [DateTime]::new(1980, 1, 1, 0, 0, 0) })) 'Windows runtime archive timestamps are not deterministic'
+        } finally {
+            $zip.Dispose()
+        }
+    }
+    if (Test-Path $wslArchive) {
+        $entries = @(& tar -tzf $wslArchive)
+        Assert-Contract ($LASTEXITCODE -eq 0) 'WSL runtime archive cannot be listed'
+        $entries = @($entries | ForEach-Object { $_ -replace '^\./', '' })
+        $expected = @('trae-cycle') + $runtimeMaterials
+        Assert-Contract ($null -eq (Compare-Object ($entries | Sort-Object) ($expected | Sort-Object))) 'WSL runtime archive inventory is not exact'
+        $modeLine = @(& tar -tvzf $wslArchive) | Where-Object { $_ -match '(?:^|/)trae-cycle$' }
+        Assert-Contract ($LASTEXITCODE -eq 0) 'WSL runtime archive modes cannot be listed'
+        Assert-Contract ($modeLine.Count -eq 1 -and $modeLine[0] -match '^-rwxr-xr-x') 'WSL runtime executable mode is not 0755'
     }
 }
 

@@ -115,9 +115,16 @@ jobs:
           workspaces: production
       - name: Build release binary from the lockfile
         run: cargo build --release --workspace --locked
+      - name: Authenticode-sign and timestamp the Windows runtime
+        if: matrix.name == 'windows-x64'
+        shell: pwsh
+        env:
+          CYCLE_WINDOWS_CERTIFICATE_BASE64: ${{ secrets.WINDOWS_CODE_SIGNING_CERTIFICATE_BASE64 }}
+          CYCLE_WINDOWS_CERTIFICATE_PASSWORD: ${{ secrets.WINDOWS_CODE_SIGNING_CERTIFICATE_PASSWORD }}
+        run: ../tools/sign-windows.ps1 -Binary 'target/release/trae-cycle.exe'
       - name: Stage archive and smoke the extracted runtime
         shell: pwsh
-        run: ../tools/archive-runtime.ps1 -Binary 'target/release/${{ matrix.binary }}' -Platform '${{ matrix.name }}' -Output '${{ github.workspace }}/${{ matrix.archive }}'
+        run: ../tools/archive-runtime.ps1 -Binary 'target/release/${{ matrix.binary }}' -Platform '${{ matrix.name }}' -Output '${{ github.workspace }}/${{ matrix.archive }}' -RequireAuthenticode:('${{ matrix.name }}' -eq 'windows-x64')
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: trae-cycle-${{ matrix.name }}

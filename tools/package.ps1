@@ -9,7 +9,9 @@ param(
     [Parameter(Mandatory = $true, ParameterSetName = 'Verify')]
     [string] $Verify,
     [Parameter(ParameterSetName = 'Verify')]
-    [switch] $RequireReleaseInventory
+    [switch] $RequireReleaseInventory,
+    [Parameter(Mandatory = $true, ParameterSetName = 'Notices')]
+    [string] $NoticesOnly
 )
 
 $ErrorActionPreference = 'Stop'
@@ -305,6 +307,21 @@ function New-Manifest(
 
 $Root = (Resolve-Path $Root).Path
 Assert-CleanRepository $Root
+
+if ($PSCmdlet.ParameterSetName -eq 'Notices') {
+    $productionRoot = Join-Path $Root 'production'
+    $metadata = Get-CargoMetadata $productionRoot
+    $externals = Test-LicenseGate $metadata
+    $version = Read-WorkspaceVersion $productionRoot
+    $noticesPath = [IO.Path]::GetFullPath($NoticesOnly)
+    $noticesParent = Split-Path $noticesPath -Parent
+    if (-not (Test-Path -LiteralPath $noticesParent)) {
+        New-Item -ItemType Directory -Path $noticesParent | Out-Null
+    }
+    New-ThirdPartyNotices $externals $noticesPath $version
+    Write-Host "third-party notices generated for $version at $noticesPath"
+    return
+}
 
 if ($PSCmdlet.ParameterSetName -eq 'Verify') {
     $Verify = (Resolve-Path $Verify).Path
