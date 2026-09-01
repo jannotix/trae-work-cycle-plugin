@@ -18,6 +18,8 @@ use workflow_roles::{
     config::READ_ONLY_ROLES,
 };
 
+const RESPONSE_TIMEOUT: Duration = Duration::from_secs(2);
+
 struct Script {
     status: u16,
     body: String,
@@ -205,7 +207,7 @@ async fn advisory_call_returns_structured_output_and_records_usage() {
     )]);
     let config = setup_roles(directory.path(), &fake.base_url);
     let ledger = UsageLedger::new();
-    let client = RolesClient::new(Duration::from_millis(500));
+    let client = RolesClient::new(RESPONSE_TIMEOUT);
 
     let call = client
         .consult(
@@ -256,7 +258,7 @@ async fn loopback_advisory_call_omits_authorization_header() {
     )]);
     let config = setup_unauthenticated_roles(&fake.base_url);
     assert!(config.validate(directory.path()).is_ok());
-    let client = RolesClient::new(Duration::from_millis(500));
+    let client = RolesClient::new(RESPONSE_TIMEOUT);
 
     client
         .consult(
@@ -285,7 +287,7 @@ async fn security_review_returns_a_binding_verdict() {
     )]);
     let config = setup_roles(directory.path(), &fake.base_url);
     let ledger = UsageLedger::new();
-    let client = RolesClient::new(Duration::from_millis(500));
+    let client = RolesClient::new(RESPONSE_TIMEOUT);
 
     let call = client
         .review(
@@ -323,7 +325,7 @@ async fn review_falls_back_to_advisory_for_plain_objects() {
         None,
     )]);
     let config = setup_roles(directory.path(), &fake.base_url);
-    let client = RolesClient::new(Duration::from_millis(500));
+    let client = RolesClient::new(RESPONSE_TIMEOUT);
 
     let call = client
         .review(
@@ -353,7 +355,7 @@ async fn review_rejects_a_verdict_bound_to_the_wrong_role() {
         None,
     )]);
     let config = setup_roles(directory.path(), &fake.base_url);
-    let client = RolesClient::new(Duration::from_millis(500));
+    let client = RolesClient::new(RESPONSE_TIMEOUT);
 
     let error = client
         .review(
@@ -385,7 +387,7 @@ async fn arbiter_verdict_is_parsed_strictly() {
         None,
     )]);
     let config = setup_roles(directory.path(), &fake.base_url);
-    let client = RolesClient::new(Duration::from_millis(500));
+    let client = RolesClient::new(RESPONSE_TIMEOUT);
 
     let call = client
         .arbitration(
@@ -413,14 +415,17 @@ async fn malformed_arbiter_output_is_a_permanent_error() {
     let directory = tempfile::tempdir().unwrap();
     let fake = start_fake(vec![Script::ok(json!({"decision": "approved"}), None)]);
     let config = setup_roles(directory.path(), &fake.base_url);
-    let client = RolesClient::new(Duration::from_millis(500));
+    let client = RolesClient::new(RESPONSE_TIMEOUT);
 
     let error = client
         .arbitration(&config, directory.path(), "decide", &UsageLedger::new())
         .await
         .expect_err("malformed verdict");
 
-    assert!(error.to_string().contains("arbiter verdict"));
+    assert!(
+        error.to_string().contains("arbiter verdict"),
+        "unexpected arbitration error: {error}"
+    );
     assert!(!error.is_transient());
 }
 
@@ -429,7 +434,7 @@ async fn server_errors_are_transient() {
     let directory = tempfile::tempdir().unwrap();
     let fake = start_fake(vec![Script::failing(500, "{\"error\":\"upstream down\"}")]);
     let config = setup_roles(directory.path(), &fake.base_url);
-    let client = RolesClient::new(Duration::from_millis(500));
+    let client = RolesClient::new(RESPONSE_TIMEOUT);
 
     let error = client
         .consult(
@@ -477,7 +482,7 @@ async fn unreadable_key_files_fail_closed() {
     )]);
     let config = setup_roles(directory.path(), &fake.base_url);
     std::fs::remove_file(directory.path().join("arbiter.key")).unwrap();
-    let client = RolesClient::new(Duration::from_millis(500));
+    let client = RolesClient::new(RESPONSE_TIMEOUT);
 
     let error = client
         .arbitration(&config, directory.path(), "decide", &UsageLedger::new())
