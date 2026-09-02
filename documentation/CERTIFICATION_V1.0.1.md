@@ -12,8 +12,10 @@ for a Trae Work UI row. Evidence from `1.0.0` is historical and is not inherited
 | Field | Current value |
 | --- | --- |
 | Branch | `release/v1.0.1-production` |
+| Current local candidate revision | Resolve from the commit containing this matrix; any later source change invalidates prior evidence |
+| Latest local runtime and WSL evidence | `b9b48a2441692c67d5e7032292db6d076ee85b38`; a final seal must rerun after this documentation update |
 | Latest remotely verified revision | `d5aa25bc95dee068f2e6891bf6d8342aacb6862c` |
-| Trae Work Windows host | `0.1.54` |
+| Trae Work Windows host | `0.1.61` (real in-place update from `0.1.54` on 2026-09-02) |
 | Windows runner | Windows 11 local; GitHub `windows-2025` |
 | WSL runner | WSL2 Ubuntu 24.04 x64, ext4 clone; GitHub `ubuntu-24.04` |
 | Rust | `1.97.1` with locked dependencies |
@@ -35,23 +37,23 @@ for a Trae Work UI row. Evidence from `1.0.0` is historical and is not inherited
 
 | ID | Check | Windows / Trae Work | WSL | Evidence or blocking condition |
 | --- | --- | --- | --- | --- |
-| I1 | Executable installs at a path without spaces | PARTIAL | PARTIAL | Windows `1.0.1` binary installed at `%LOCALAPPDATA%\TraeCycle\bin\trae-cycle.exe`, SHA-256 `343b19d6fdc1ebe55e5589ce0051477fb86aaa6d92a72a0084ddfcc6f1011ee0`; final signed artifact and final WSL archive pending |
-| I2 | Extracted runtime archive contains binary, README, license, notice, and complete third-party notices | PARTIAL | PARTIAL | Windows deterministic unsigned rehearsal and WSL deterministic manual rehearsal passed; final signed/exact-SHA archives pending |
-| I3 | Skill ZIP has root-level `SKILL.md`, `LICENSE`, and `NOTICE` and Trae Work accepts it | PARTIAL | N/A | `1.0.1` ZIP SHA-256 `86231a2208013ab6147ee26e3cd20df1a1f629fd03733e030639a5a952796ec8` passes package contract; Trae Work upload was proven only for the earlier `1.0.0` candidate |
-| I4 | `cycle` Command is created from the shipped definition | PARTIAL | N/A | Command is present in Trae Work 0.1.54; exact final Skill/update session still pending |
-| I5 | MCP entry starts the installed binary and exposes the complete tool catalog | PARTIAL | PARTIAL | Trae Work showed the local server healthy and exposed `cycle_consent`; current `1.0.1` restart is pending. CLI MCP smoke passed on Windows and WSL |
+| I1 | Executable installs at a path without spaces | PARTIAL | PARTIAL | Windows `1.0.1` binary installed at `%LOCALAPPDATA%\TraeCycle\bin\trae-cycle.exe`, SHA-256 `343b19d6fdc1ebe55e5589ce0051477fb86aaa6d92a72a0084ddfcc6f1011ee0`; WSL candidate archive SHA-256 `7ee8fccd703186c8785e1483384f337fe4998b321171becb17965bd1777330c5`; final signed/exact-SHA pair pending |
+| I2 | Extracted runtime archive contains binary, README, license, notice, and complete third-party notices | PARTIAL | PARTIAL | Windows candidate archive SHA-256 `e03bb98f2ac64fda0287b00fffb2f2c1075aab7485681d625f86711e9a072818` and WSL candidate archive both passed extracted MCP smoke; final signed/exact-SHA archives pending |
+| I3 | Skill ZIP has root-level `SKILL.md`, `LICENSE`, and `NOTICE` and Trae Work accepts it | PARTIAL | N/A | `1.0.1` ZIP SHA-256 `86231a2208013ab6147ee26e3cd20df1a1f629fd03733e030639a5a952796ec8` passes package contract; the active supported local Skill installation now has source `SKILL.md` SHA-256 `a44b45131cc2d57916028080271bad73f8a17b7d7ea433acab247af2a56a5658`; exact Marketplace-upload revalidation remains pending |
+| I4 | `cycle` Command is created from the shipped definition | PARTIAL | N/A | The existing Command invoked an explicit `cycle_setup` MCP tool call after the host update; command-definition and final-Skill session revalidation remain pending |
+| I5 | MCP entry starts the installed binary and exposes the complete tool catalog | PARTIAL | PARTIAL | Post-update explicit `cycle_setup` returned protocol v1/schema v18 and all configured loopback roles. CLI MCP smoke passed from extracted Windows and WSL candidate archives; complete host-catalog observation is pending |
 | I6 | Clean uninstall removes executable, Skill, Command, and MCP entry but preserves projects/data | BLOCKED | BLOCKED | Must run after quick/full/restart on final artifacts, then clean reinstall |
 
 ## 3. Trae Work workflow certification
 
-| ID | Check | Automated control plane | Trae Work 0.1.54 UI | Evidence or blocking condition |
+| ID | Check | Automated control plane | Trae Work 0.1.61 UI | Evidence or blocking condition |
 | --- | --- | --- | --- | --- |
-| W1 | `/cycle setup` and `/cycle doctor` report the configured loopback roles healthy | PASS | BLOCKED | The old binary reported the now-fixed optional-auth defect. `1.0.1` is installed, but another active Windows Computer Use request invalidates every action before the rerun |
+| W1 | `/cycle setup` and `/cycle doctor` report the configured loopback roles healthy | PASS | PARTIAL | After the real 0.1.54 → 0.1.61 update, an explicit UI-requested `cycle_setup` call returned `roles.configured: true` for architect, functional reviewer, security reviewer and arbiter on the loopback endpoint. The required `cycle_doctor` capture is still pending |
 | W2 | Quick workflow traverses Skill → Command → MCP → role → verification → arbitration → promotion | PASS | BLOCKED | `quick_cycle_delivers_tested_software_end_to_end` passes Windows and WSL; UI run pending |
 | W3 | Full workflow performs two blind reviews, rejection, repair, re-review, and approval | PASS | BLOCKED | `full_cycle_requires_two_blind_reviews_and_repairs_once` passes Windows and WSL; UI run pending |
 | W4 | Two projects remain isolated under concurrent workflows | PASS | PENDING | Automated Windows/WSL test passed; UI isolation observation not yet recorded |
 | W5 | Restart during a workflow resumes from durable state | PASS | BLOCKED | Daemon lifecycle/restart tests pass; close/reopen Trae Work and `/cycle:resume` pending |
-| W6 | Trae Work update preserves MCP, Skill, Command, and durable state | N/A | BLOCKED | Requires an available Trae Work update or a documented same-version reinstall rehearsal |
+| W6 | Trae Work update preserves MCP, Skill, Command, and durable state | N/A | PARTIAL | A real 0.1.54 → 0.1.61 update preserved the task, Command, MCP registration and data directory; the current Skill was then updated from the verified 1.0.1 ZIP. Restart/reload and workflow-resume capture remain pending |
 | W7 | Exact verification command is displayed and runs only after user grants its single-use consent token | PASS | BLOCKED | Automated negative/positive path passes; manual prompt/approval/second-verify path pending |
 
 ## 4. Performance and release artifacts
@@ -67,8 +69,8 @@ for a Trae Work UI row. Evidence from `1.0.0` is historical and is not inherited
 
 ## 5. Final gate order
 
-1. Release the competing Windows Computer Use request, then rerun the pinned
-   Trae Work UI rows W1–W7 with the `1.0.1` Skill and binary.
+1. Re-establish a stable Trae Work 0.1.61 UI control path, then complete rows
+   W2–W7 with the `1.0.1` Skill and binary.
 2. Complete restart, update/reinstall, uninstall, and clean reinstall on Windows;
    complete the equivalent native CLI/MCP lifecycle on WSL.
 3. Supply a production code-signing identity as protected environment secrets,
