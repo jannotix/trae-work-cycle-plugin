@@ -670,6 +670,10 @@ async fn start(ctx: &ToolContext, args: &Value) -> Result<Value, String> {
 async fn status(ctx: &ToolContext, args: &Value) -> Result<Value, String> {
     let project_key = str_arg(args, "project_key")?;
     let workflow_id = opt_id_arg(args, "workflow_id")?;
+    // An MCP frontend can be recreated by a Trae Work restart while the durable
+    // workflow remains. Status is often its first control-plane operation, so
+    // it must wait for (or recreate) the daemon before opening the IPC channel.
+    ctx.daemon.ensure().await?;
     let workflow = control(ctx, &project_key, ControlOperation::Status, workflow_id).await;
     let jobs = ctx.jobs.snapshot().await;
     let workflow = match workflow {

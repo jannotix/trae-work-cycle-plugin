@@ -2,6 +2,62 @@ mod common;
 
 use common::{call_tool, initialize, spawn_daemon, write_roles};
 use serde_json::json;
+use std::{
+    process::Command,
+    thread,
+    time::{Duration, Instant},
+};
+
+struct SpawnedDaemonGuard(u32);
+
+impl Drop for SpawnedDaemonGuard {
+    fn drop(&mut self) {
+        #[cfg(windows)]
+        let _ = Command::new("taskkill")
+            .args(["/PID", &self.0.to_string(), "/T", "/F"])
+            .status();
+        #[cfg(unix)]
+        let _ = Command::new("kill")
+            .args(["-TERM", &self.0.to_string()])
+            .status();
+    }
+}
+
+fn wait_for_spawned_daemon(data_dir: &std::path::Path) -> SpawnedDaemonGuard {
+    let pid_file = data_dir.join("runtime").join("workflowd.pid");
+    let deadline = Instant::now() + Duration::from_secs(20);
+    while Instant::now() < deadline {
+        if let Ok(pid) = std::fs::read_to_string(&pid_file)
+            && let Ok(pid) = pid.trim().parse::<u32>()
+            && pid != 0
+        {
+            return SpawnedDaemonGuard(pid);
+        }
+        thread::sleep(Duration::from_millis(50));
+    }
+    panic!("status did not start a daemon");
+}
+
+#[test]
+fn status_starts_the_daemon_after_an_mcp_restart() {
+    let data_dir = tempfile::tempdir().unwrap();
+    let mut client = common::McpClient::spawn(data_dir.path());
+    initialize(&mut client);
+
+    // This simulates a restarted Trae Work MCP frontend before any other tool
+    // has recreated the local daemon. The public status tool must self-heal.
+    let status = call_tool(
+        &mut client,
+        "cycle_status",
+        json!({"project_key": "restarted-mcp"}),
+    );
+    let _daemon = wait_for_spawned_daemon(data_dir.path());
+    assert!(
+        status["jobs"].is_array(),
+        "status must return its normal envelope after daemon startup: {status}"
+    );
+    assert!(status["workflow"].is_null());
+}
 
 #[test]
 fn mcp_frontend_drives_the_control_plane_end_to_end() {
