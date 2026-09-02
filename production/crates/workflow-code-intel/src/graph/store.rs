@@ -32,7 +32,9 @@ const CREATE_SECONDARY_INDEXES: &str = "
     CREATE INDEX code_edges_target ON code_edges(target_id, partition_id, generation);
 ";
 const INSERT_BATCH_ROWS: usize = 128;
-const GRAPH_CACHE_KIB: i64 = -262_144;
+// Keep the graph writer within the headroom of the certified 500k host while
+// retaining enough cache for bounded multi-row persistence.
+const GRAPH_CACHE_KIB: i64 = -196_608;
 const _: () = assert!(INSERT_BATCH_ROWS * 6 < 999);
 
 #[derive(Debug)]
