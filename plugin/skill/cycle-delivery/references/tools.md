@@ -68,9 +68,10 @@ when they contain one item. `request_digest` is the exact digest returned by
 ```
 
 The task graph must be acyclic, every requirement must be linked by at least
-one task, and every task needs at least one concrete verification command.
-Empty write scopes are allowed only for a genuinely read-only task; do not
-claim a no-write task if a verification command can modify the repository.
+one task, and every task needs at least one concrete verification command and
+one safe repository-relative write scope. A genuinely read-only task still
+uses a narrow scope such as `README.md`, but must not write to it. Do not claim
+a no-write task if a verification command can modify the repository.
 
 ## Role Consultations
 
