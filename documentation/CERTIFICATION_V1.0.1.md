@@ -38,7 +38,7 @@ for a Trae Work UI row. Evidence from `1.0.0` is historical and is not inherited
 | ID | Check | Windows / Trae Work | WSL | Evidence or blocking condition |
 | --- | --- | --- | --- | --- |
 | I1 | Executable installs at a path without spaces | PARTIAL | PARTIAL | Windows `1.0.1` binary installed at `%LOCALAPPDATA%\TraeCycle\bin\trae-cycle.exe`, SHA-256 `343b19d6fdc1ebe55e5589ce0051477fb86aaa6d92a72a0084ddfcc6f1011ee0`; WSL candidate archive SHA-256 `7ee8fccd703186c8785e1483384f337fe4998b321171becb17965bd1777330c5`; final signed/exact-SHA pair pending |
-| I2 | Extracted runtime archive contains binary, README, license, notice, and complete third-party notices | PARTIAL | PARTIAL | Windows candidate archive SHA-256 `e03bb98f2ac64fda0287b00fffb2f2c1075aab7485681d625f86711e9a072818` and WSL candidate archive both passed extracted MCP smoke; final signed/exact-SHA archives pending |
+| I2 | Extracted runtime archive contains binary, README, license, notice, and complete third-party notices | PARTIAL | PARTIAL | Windows candidate built at `05daf813…`, SHA-256 `4feb59a5cb74e426268282870ca454b23cc36fb7a7d41260c1c637887caea97b`, passed extraction and MCP smoke; it is deliberately unsigned. The earlier WSL candidate archive also passed extraction and MCP smoke. Final signed Windows and exact-SHA WSL archives remain pending |
 | I3 | Skill ZIP has root-level `SKILL.md`, `LICENSE`, and `NOTICE` and Trae Work accepts it | PARTIAL | N/A | `1.0.1` ZIP SHA-256 `86231a2208013ab6147ee26e3cd20df1a1f629fd03733e030639a5a952796ec8` passes package contract; the active supported local Skill installation now has source `SKILL.md` SHA-256 `a44b45131cc2d57916028080271bad73f8a17b7d7ea433acab247af2a56a5658`; exact Marketplace-upload revalidation remains pending |
 | I4 | `cycle` Command is created from the shipped definition | PARTIAL | N/A | The existing Command invoked an explicit `cycle_setup` MCP tool call after the host update; command-definition and final-Skill session revalidation remain pending |
 | I5 | MCP entry starts the installed binary and exposes the complete tool catalog | PARTIAL | PARTIAL | Post-update explicit `cycle_setup` returned protocol v1/schema v18 and all configured loopback roles. CLI MCP smoke passed from extracted Windows and WSL candidate archives; complete host-catalog observation is pending |
@@ -48,8 +48,8 @@ for a Trae Work UI row. Evidence from `1.0.0` is historical and is not inherited
 
 | ID | Check | Automated control plane | Trae Work 0.1.61 UI | Evidence or blocking condition |
 | --- | --- | --- | --- | --- |
-| W1 | `/cycle setup` and `/cycle doctor` report the configured loopback roles healthy | PASS | PARTIAL | After the real 0.1.54 → 0.1.61 update, an explicit UI-requested `cycle_setup` call returned `roles.configured: true` for architect, functional reviewer, security reviewer and arbiter on the loopback endpoint. The required `cycle_doctor` capture is still pending |
-| W2 | Quick workflow traverses Skill → Command → MCP → role → verification → arbitration → promotion | PASS | BLOCKED | `quick_cycle_delivers_tested_software_end_to_end` passes Windows and WSL; UI run pending |
+| W1 | `/cycle setup` and `/cycle doctor` report the configured loopback roles healthy | PASS | PASS | On Trae Work `0.1.61`, the live `/cycle setup` result reported product `1.0.1`, protocol v1/schema v18, writable `TraeCycleCert` data, Git `2.55.0.windows.5`, and all five roles via `127.0.0.1:18765`. The subsequent live `/cycle doctor` result was `PASS` with a valid ledger, matching schema, ReadWrite store, and the same five loopback roles |
+| W2 | Quick workflow traverses Skill → Command → MCP → role → verification → arbitration → promotion | PASS | BLOCKED | `quick_cycle_delivers_tested_software_end_to_end` passes Windows and WSL. On the live host, `/cycle run quick` entered the native argument collector, accepted the isolated `trae-ui-fixture` project key, and proceeded to the original-request/indexing prompts. The Trae Work `0.1.61` prompt footer is intermittently clipped or loses UI focus before the workflow can start; no quick completion is claimed |
 | W3 | Full workflow performs two blind reviews, rejection, repair, re-review, and approval | PASS | BLOCKED | `full_cycle_requires_two_blind_reviews_and_repairs_once` passes Windows and WSL; UI run pending |
 | W4 | Two projects remain isolated under concurrent workflows | PASS | PENDING | Automated Windows/WSL test passed; UI isolation observation not yet recorded |
 | W5 | Restart during a workflow resumes from durable state | PASS | BLOCKED | Daemon lifecycle/restart tests pass; close/reopen Trae Work and `/cycle:resume` pending |
@@ -63,14 +63,15 @@ for a Trae Work UI row. Evidence from `1.0.0` is historical and is not inherited
 | P1 | 500,100-source-file benchmark exits 0 with `passed: true` under the unchanged 30-minute SLA | PARTIAL | Passed on cache-ceiling commit `123d481…` in 1,259,776 ms with an 898.1 MiB peak and zero parse errors; must rerun after the final source/report commit |
 | P2 | Windows runtime is Authenticode-signed and RFC 3161 timestamped | BLOCKED | No local code-signing certificate and no `windows-code-signing` environment secrets exist. The release workflow refuses unsigned bytes |
 | P3 | Runtime archives are deterministic and preserve exact platform modes | PASS | Two Windows rehearsals produced identical SHA-256; WSL tar replay verified documents `0644` and executable `0755` |
-| P4 | Full release inventory, manifest, checksums, SBOM, secret scan, and provenance all verify | PARTIAL | Local current-revision packaging passes without the final WSL/signed Windows pair; tag release workflow remains pending |
+| P4 | Full release inventory, manifest, checksums, SBOM, secret scan, and provenance all verify | PARTIAL | The unsigned Windows candidate built at `05daf813…` passed extracted MCP smoke and release-secret scan. Full inventory, manifest, SBOM/provenance, final WSL asset, and signed Windows asset remain mandatory |
 | P5 | Approval environments prevent unattended signing/publication | PASS | `windows-code-signing`: reviewer `jannotix`, branch `main` or tag `v*`; `production-release`: reviewer `jannotix`, tag `v*` only |
 | P6 | Marketplace bundle is accepted and submitted | BLOCKED | Listing, permissions, data flow, policies, install recipe, logo, and checklist are prepared. External submission waits for final public assets and owner confirmation at action time |
 
 ## 5. Final gate order
 
-1. Re-establish a stable Trae Work 0.1.61 UI control path, then complete rows
-   W2–W7 with the `1.0.1` Skill and binary.
+1. Re-establish a stable Trae Work 0.1.61 UI control path at the native quick
+   workflow collector, then complete rows W2–W7 with the `1.0.1` Skill and
+   binary.
 2. Complete restart, update/reinstall, uninstall, and clean reinstall on Windows;
    complete the equivalent native CLI/MCP lifecycle on WSL.
 3. Supply a production code-signing identity as protected environment secrets,
