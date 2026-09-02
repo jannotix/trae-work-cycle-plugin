@@ -60,7 +60,7 @@ for a Trae Work UI row. Evidence from `1.0.0` is historical and is not inherited
 
 | ID | Check | Result | Evidence or blocking condition |
 | --- | --- | --- | --- |
-| P1 | 500,100-source-file benchmark exits 0 with `passed: true` under the unchanged 30-minute SLA | PARTIAL | Passed on optimization commit `c9ff3ef…` in 1,418,402 ms with zero parse errors; must rerun after the final source/report commit |
+| P1 | 500,100-source-file benchmark exits 0 with `passed: true` under the unchanged 30-minute SLA | PARTIAL | Passed on cache-ceiling commit `123d481…` in 1,259,776 ms with an 898.1 MiB peak and zero parse errors; must rerun after the final source/report commit |
 | P2 | Windows runtime is Authenticode-signed and RFC 3161 timestamped | BLOCKED | No local code-signing certificate and no `windows-code-signing` environment secrets exist. The release workflow refuses unsigned bytes |
 | P3 | Runtime archives are deterministic and preserve exact platform modes | PASS | Two Windows rehearsals produced identical SHA-256; WSL tar replay verified documents `0644` and executable `0755` |
 | P4 | Full release inventory, manifest, checksums, SBOM, secret scan, and provenance all verify | PARTIAL | Local current-revision packaging passes without the final WSL/signed Windows pair; tag release workflow remains pending |

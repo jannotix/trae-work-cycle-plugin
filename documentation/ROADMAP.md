@@ -4,7 +4,7 @@ Status after 1.0.0. Everything here is direction, not commitment; nothing ships 
 
 ## 1.0.1 candidate — Scale throughput
 
-The 500k-file benchmark now passes the unchanged 30-minute gate on the SATA-class Windows certification host. Large cold indexes transactionally defer three secondary indexes, insert graph/manifest/FTS rows in bounded multi-row batches, rebuild the indexes before commit, and use a 256 MiB SQLite cache ceiling. No schema or stored-format change is required; existing indexes remain valid. The optimization receipt on `c9ff3ef` records 23m 38.4s total, 0 parse errors and a 46.1s incremental refresh. Final release sealing must repeat the full benchmark on the final SHA.
+The 500k-file benchmark now passes the unchanged 30-minute gate on the SATA-class Windows certification host. Large cold indexes transactionally defer three secondary indexes, insert graph/manifest/FTS rows in bounded multi-row batches, rebuild the indexes before commit, and use a 192 MiB SQLite cache ceiling. No schema or stored-format change is required; existing indexes remain valid. The optimization receipt on `123d481` records 20m 59.8s total, 0 parse errors, an 898.1 MiB peak, and a 21.8s incremental refresh. Final release sealing must repeat the full benchmark on the final SHA.
 
 ## 1.2 — Certification breadth
 
