@@ -33,6 +33,45 @@ All operations are exposed by the `trae-cycle` MCP server. The schema returned b
 | `cycle_retry` | Retries a classified transient failure without consuming a repair cycle. |
 | `cycle_cancel` | Cancels the workflow. Requires `confirm: true` after explicit user approval. History and evidence are preserved. |
 
+## Architecture plan shape
+
+Pass exactly one `plan` object with these six keys. Arrays must remain arrays even
+when they contain one item. `request_digest` is the exact digest returned by
+`cycle_start`; do not invent or shorten it.
+
+```json
+{
+  "assumptions": ["bounded assumption"],
+  "integration_checks": ["end-to-end observable check"],
+  "request_digest": "64 lowercase hex characters from cycle_start",
+  "requirements": [
+    {
+      "acceptance_criteria": ["observable acceptance criterion"],
+      "id": "REQ-1",
+      "statement": "bounded requirement statement"
+    }
+  ],
+  "risks": ["bounded risk"],
+  "tasks": [
+    {
+      "acceptance_criteria": ["observable task outcome"],
+      "dependencies": [],
+      "id": "UUID task identifier",
+      "objective": "bounded task objective",
+      "requirement_ids": ["REQ-1"],
+      "title": "bounded task title",
+      "verification_commands": ["exact verification command"],
+      "write_scopes": ["repository-relative write scope"]
+    }
+  ]
+}
+```
+
+The task graph must be acyclic, every requirement must be linked by at least
+one task, and every task needs at least one concrete verification command.
+Empty write scopes are allowed only for a genuinely read-only task; do not
+claim a no-write task if a verification command can modify the repository.
+
 ## Role Consultations
 
 | Tool | Purpose |
