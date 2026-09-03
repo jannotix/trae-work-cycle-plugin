@@ -613,6 +613,10 @@ async fn doctor(ctx: &ToolContext) -> Result<Value, String> {
 
 async fn start(ctx: &ToolContext, args: &Value) -> Result<Value, String> {
     roles::load(&ctx.data_dir).map_err(|error| error.to_string())?;
+    // Like status, start can be the first request from an MCP frontend recreated
+    // by Trae Work. Reconnect or recreate the durable control plane before the
+    // first IPC exchange instead of exposing a stale local-socket error.
+    ctx.daemon.ensure().await?;
     let project_key = str_arg(args, "project_key")?;
     let original_request = str_arg(args, "original_request")?;
     let preference = match str_arg(args, "mode")?.as_str() {

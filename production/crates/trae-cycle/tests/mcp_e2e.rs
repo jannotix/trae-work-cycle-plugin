@@ -60,6 +60,29 @@ fn status_starts_the_daemon_after_an_mcp_restart() {
 }
 
 #[test]
+fn start_starts_the_daemon_after_an_mcp_restart() {
+    let data_dir = tempfile::tempdir().unwrap();
+    write_roles(data_dir.path(), "https://api.example.invalid/v1");
+    let mut client = common::McpClient::spawn(data_dir.path());
+    initialize(&mut client);
+
+    // Start, not status, is normally the first tool used after `/cycle run`.
+    // It must therefore repair a missing daemon before its first IPC request.
+    let started = call_tool(
+        &mut client,
+        "cycle_start",
+        json!({
+            "mode": "full",
+            "original_request": "restart recovery certification",
+            "project_key": "restarted-start-mcp",
+        }),
+    );
+    let _daemon = wait_for_spawned_daemon(data_dir.path());
+    assert_eq!(started["mode"], "full");
+    assert!(started["workflowId"].as_str().is_some());
+}
+
+#[test]
 fn mcp_frontend_drives_the_control_plane_end_to_end() {
     let data_dir = tempfile::tempdir().unwrap();
     let data_path = data_dir.path().to_path_buf();
