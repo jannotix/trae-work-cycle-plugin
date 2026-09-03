@@ -1,37 +1,64 @@
 use std::{
     io::{BufRead, BufReader, Read, Write},
     net::{TcpListener, TcpStream},
+    sync::{
+        Arc,
+        atomic::{AtomicUsize, Ordering},
+    },
     thread,
 };
 
 use serde_json::{Value, json};
 
 fn main() {
-    let port = std::env::args()
-        .skip(1)
+    let arguments = std::env::args().skip(1).collect::<Vec<_>>();
+    let port = arguments
+        .iter()
         .find_map(|argument| argument.strip_prefix("--port=").map(str::to_owned))
         .unwrap_or_else(|| "18765".to_owned());
+    let configuration = EndpointConfiguration {
+        reject_first_arbiter: arguments
+            .iter()
+            .any(|argument| argument == "--reject-first-arbiter"),
+        arbiter_verdicts: Arc::new(AtomicUsize::new(0)),
+    };
     let listener = TcpListener::bind(format!("127.0.0.1:{port}"))
         .expect("certification role endpoint must bind to localhost");
-    println!("certification role endpoint: http://127.0.0.1:{port}/v1");
+    println!(
+        "certification role endpoint: http://127.0.0.1:{port}/v1 (reject-first-arbiter: {})",
+        configuration.reject_first_arbiter
+    );
     for stream in listener.incoming() {
         match stream {
             Ok(stream) => {
-                thread::spawn(move || serve(stream));
+                let configuration = configuration.clone();
+                thread::spawn(move || serve(stream, configuration));
             }
             Err(error) => eprintln!("certification endpoint accept failed: {error}"),
         }
     }
 }
 
-fn serve(stream: TcpStream) {
+#[derive(Clone)]
+struct EndpointConfiguration {
+    reject_first_arbiter: bool,
+    arbiter_verdicts: Arc<AtomicUsize>,
+}
+
+impl EndpointConfiguration {
+    fn should_reject_arbiter(&self) -> bool {
+        self.reject_first_arbiter && self.arbiter_verdicts.fetch_add(1, Ordering::SeqCst) == 0
+    }
+}
+
+fn serve(stream: TcpStream, configuration: EndpointConfiguration) {
     let Ok(mut writer) = stream.try_clone() else {
         return;
     };
     let Some(body) = capture_request(&mut BufReader::new(stream)) else {
         return;
     };
-    let content = response_content(&body).to_string();
+    let content = response_content(&body, &configuration).to_string();
     let payload = json!({
         "choices": [{
             "finish_reason": "stop",
@@ -77,7 +104,7 @@ fn capture_request(reader: &mut BufReader<TcpStream>) -> Option<Value> {
     serde_json::from_slice(&body).ok()
 }
 
-fn response_content(body: &Value) -> Value {
+fn response_content(body: &Value, configuration: &EndpointConfiguration) -> Value {
     let system = body["messages"][0]["content"].as_str().unwrap_or_default();
     let request = body["messages"][1]["content"]
         .as_str()
@@ -90,6 +117,9 @@ fn response_content(body: &Value) -> Value {
         return review(&request, "security_architecture_reviewer");
     }
     if system.contains("You are the arbiter") && system.contains("decide approval") {
+        if configuration.should_reject_arbiter() {
+            return rejected_arbiter_verdict(&request);
+        }
         return json!({
             "candidate_digest": request["candidateDigest"],
             "decision": "approved",
@@ -111,6 +141,20 @@ fn response_content(body: &Value) -> Value {
         "points": ["Use one bounded task with the fixture verification command."],
         "risks": [],
         "summary": "Deterministic certification architecture advisory.",
+    })
+}
+
+fn rejected_arbiter_verdict(request: &Value) -> Value {
+    json!({
+        "candidate_digest": request["candidateDigest"],
+        "decision": "rejected",
+        "findings": [{
+            "evidence_ids": request["evidenceIds"].as_array().cloned().unwrap_or_default(),
+            "severity": "medium",
+            "summary": "certification control: the first arbiter verdict requires one execution repair pass",
+        }],
+        "repair_target": "execution",
+        "requirements": requirement_decisions(request),
     })
 }
 
@@ -145,6 +189,13 @@ fn requirement_decisions(request: &Value) -> Vec<Value> {
 mod tests {
     use super::*;
 
+    fn configuration(reject_first_arbiter: bool) -> EndpointConfiguration {
+        EndpointConfiguration {
+            reject_first_arbiter,
+            arbiter_verdicts: Arc::new(AtomicUsize::new(0)),
+        }
+    }
+
     #[test]
     fn role_shapes_bind_candidate_requirements_and_evidence() {
         let request = json!({
@@ -164,8 +215,28 @@ mod tests {
             {"content": "You are the architect", "role": "system"},
             {"content": "{}", "role": "user"},
         ]});
-        let response = response_content(&body);
+        let response = response_content(&body, &configuration(false));
         assert!(response.get("summary").is_some());
         assert!(response.get("decision").is_none());
+    }
+
+    #[test]
+    fn optional_control_rejects_only_the_first_arbiter_verdict() {
+        let body = json!({"messages": [
+            {"content": "You are the arbiter and decide approval", "role": "system"},
+            {"content": serde_json::to_string(&json!({
+                "candidateDigest": "a".repeat(64),
+                "evidenceIds": ["e-1"],
+                "requirementIds": ["REQ-1"],
+            })).unwrap(), "role": "user"},
+        ]});
+        let configuration = configuration(true);
+        let rejected = response_content(&body, &configuration);
+        assert_eq!(rejected["decision"], "rejected");
+        assert_eq!(rejected["repair_target"], "execution");
+        assert_eq!(
+            response_content(&body, &configuration)["decision"],
+            "approved"
+        );
     }
 }

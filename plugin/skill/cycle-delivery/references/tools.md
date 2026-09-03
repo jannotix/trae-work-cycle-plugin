@@ -21,7 +21,7 @@ All operations are exposed by the `trae-cycle` MCP server. The schema returned b
 | `cycle_evidence` | Registers executor evidence. Arguments: `project_key`, optional `workflow_id`, `session_id`, `files` (up to 1000), `metadata` (string values, each at most 512 characters). |
 | `cycle_worktree` | Creates the isolated Git worktree for governed execution. Arguments: `project_key`, `workflow_id`, `project_directory` (the user's repository). Returns `{path, baseRevision}`; every edit belongs inside `path`, and `baseRevision` feeds `cycle_freeze`. |
 | `cycle_index` **job** | Indexes the project repository for mandatory code intelligence. Arguments: `project_key`, `workflow_id`, `project_directory`. Binds the repository identity that `cycle_promote` verifies; run at least once per workflow before delivery. |
-| `cycle_submit_architecture` | Submits the architect plan for validation and acceptance. Arguments: `project_key`, `workflow_id`, `plan` (ArchitecturePlan object). |
+| `cycle_submit_architecture` | Submits the architect plan for validation and acceptance. Arguments: `project_key`, `workflow_id`, and exactly one of `plan` (ArchitecturePlan object) or `plan_json` (a string containing the complete serialized ArchitecturePlan). |
 | `cycle_execution_report` | Reports execution outcome. Arguments: `project_key`, `workflow_id`, `outcome` (`blocked` \| `plan_defect`). |
 | `cycle_freeze` **job** | Plans verification and freezes the exact candidate. Arguments: `project_key`, `workflow_id`, `base_revision` (40-character Git revision). Requires a clean worktree. |
 | `cycle_verify` **job** | Runs the verification plan over the frozen candidate. Arguments: `project_key`, `workflow_id`, `candidate_id`, `plan_id`, optional `attestations` (managed browser attestations). |
@@ -76,6 +76,10 @@ a no-write task if a verification command can modify the repository.
 For the isolated Cycle certification fixture, use `rustc --version` as the
 verification command. It is a bounded read-only probe accepted by the verifier;
 do not substitute `git status --porcelain` or a shell wrapper.
+
+When the host cannot transport an ArchitecturePlan as an object, serialize the
+entire plan once with JSON and supply that exact string as `plan_json`. Do not
+double-encode it, omit nested fields, or send `plan` and `plan_json` together.
 
 ## Role Consultations
 
