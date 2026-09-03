@@ -73,6 +73,10 @@ one safe repository-relative write scope. A genuinely read-only task still
 uses a narrow scope such as `README.md`, but must not write to it. Do not claim
 a no-write task if a verification command can modify the repository.
 
+For the isolated Cycle certification fixture, use `rustc --version` as the
+verification command. It is a bounded read-only probe accepted by the verifier;
+do not substitute `git status --porcelain` or a shell wrapper.
+
 ## Role Consultations
 
 | Tool | Purpose |
