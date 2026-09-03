@@ -137,10 +137,11 @@ pub fn descriptors() -> Vec<Value> {
             "Submit the architect plan for validation and acceptance.",
             json!({
                 "plan": {"type": "object"},
+                "plan_json": {"type": "string", "description": "Exact serialized ArchitecturePlan when a host transport corrupts nested arrays."},
                 "project_key": project_key(),
                 "workflow_id": workflow_id(),
             }),
-            &["project_key", "workflow_id", "plan"],
+            &["project_key", "workflow_id"],
         ),
         tool(
             "cycle_execution_report",
@@ -821,11 +822,13 @@ async fn index(ctx: &ToolContext, args: &Value) -> Result<Value, String> {
 async fn submit_architecture(ctx: &ToolContext, args: &Value) -> Result<Value, String> {
     let project_key = str_arg(args, "project_key")?;
     let workflow_id = id_arg::<WorkflowId>(args, "workflow_id")?;
-    let plan: ArchitecturePlan = serde_json::from_value(
-        args.get("plan")
-            .cloned()
-            .ok_or_else(|| "plan is required".to_owned())?,
-    )
+    let plan: ArchitecturePlan = match (args.get("plan"), args.get("plan_json")) {
+        (Some(_), Some(_)) => return Err("provide exactly one of plan or plan_json".to_owned()),
+        (Some(value), None) => serde_json::from_value(value.clone()),
+        (None, Some(Value::String(raw))) => serde_json::from_str(raw),
+        (None, Some(_)) => return Err("plan_json must be a string".to_owned()),
+        (None, None) => return Err("plan or plan_json is required".to_owned()),
+    }
     .map_err(|error| format!("plan is invalid: {error}"))?;
     let envelope = ProtocolEnvelope::new(ProtocolPayload::Architecture(plan));
     let message = ClientMessage::Request(IpcRequest {
