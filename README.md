@@ -33,12 +33,13 @@ Cycle for Trae Work keeps the original request immutable, separates implementati
 - Project build/test commands are shown before execution unless covered by the narrow preapproved policy; approval is expiring, single-use and recorded in the audit ledger. Cycle does not claim an OS sandbox.
 - Windows 10/11 x64 with Trae Work Desktop and WSL2 Ubuntu x64 are the certified v1 lanes.
 - macOS is **compatible but untested** and carries no v1 support or certification claim.
+- The Windows runtime is **not Authenticode-signed** in this release, so its first run shows a SmartScreen warning. What proves the bytes are ours is the published SHA-256 and the GitHub provenance attestation; verify those.
 
 ## Install
 
 Requirements: Trae Work Desktop on Windows x64 for the host integration, or WSL2 Ubuntu x64 for the native CLI/MCP runtime lane. No Rust toolchain, service account or Trae Work credential is involved.
 
-1. Download the platform archive from [Releases](https://github.com/jannotix/trae-work-cycle-plugin/releases) (`trae-cycle-windows-x64.zip` or `trae-cycle-wsl-x64.tar.gz`). On Windows, unpack `trae-cycle.exe` to a permanent path with no spaces, for example `%LOCALAPPDATA%\TraeCycle\bin\`. In WSL, unpack `trae-cycle` to `~/.local/share/trae-cycle/bin/` and keep it executable.
+1. Download the platform archive from [Releases](https://github.com/jannotix/trae-work-cycle-plugin/releases) (`trae-cycle-windows-x64.zip` or `trae-cycle-wsl-x64.tar.gz`). Verify it against the release's `SHA256SUMS.txt` and its GitHub provenance attestation. On Windows, unpack `trae-cycle.exe` to a permanent path with no spaces, for example `%LOCALAPPDATA%\TraeCycle\bin\`. In WSL, unpack `trae-cycle` to `~/.local/share/trae-cycle/bin/` and keep it executable.
 2. Register the MCP server in Trae Work settings (local environment) using `plugin/install/mcp.example.json` as the template, with your unpacked paths.
 3. Upload `cycle-delivery-skill-<version>.zip` from Trae Work's Skills marketplace, or unpack it into `%USERPROFILE%\.trae-cn\skills\cycle-delivery\`. The upload archive carries `SKILL.md` at its root as required by Trae Work.
 4. Create the `cycle` command in Trae Work settings from `plugin/command/cycle.md`.

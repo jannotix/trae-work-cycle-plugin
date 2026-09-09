@@ -10,7 +10,8 @@ use this explicit recipe until Trae Work supplies an accepted bundle contract.
 1. Download `trae-cycle-windows-x64.zip`,
    `cycle-delivery-skill-<version>.zip`, `MANIFEST.json`, and
    `SHA256SUMS.txt` from the same immutable GitHub Release.
-2. Verify the manifest, checksums, GitHub provenance attestations, and the
+2. Verify the manifest, checksums, and GitHub provenance attestations. When the
+   release notes state that the Windows runtime is signed, also verify the
    Authenticode signature and trusted timestamp of `trae-cycle.exe`.
 3. Extract the runtime archive. It must contain exactly `trae-cycle.exe`,
    `README.md`, `LICENSE`, `NOTICE`, and `THIRD-PARTY-NOTICES.md`.
@@ -28,6 +29,12 @@ use this explicit recipe until Trae Work supplies an accepted bundle contract.
    environment-variable or file key reference.
 9. Run `/cycle setup`, `/cycle doctor`, and `/cycle history verify` before the
    first delivery.
+
+An unsigned Windows runtime raises a SmartScreen warning on first run ("Windows
+protected your PC"). What proves those bytes came from this repository's release
+workflow is the published SHA-256 and the GitHub provenance attestation, not the
+absence of a warning. Verify both in step 2; the presence or absence of a
+SmartScreen prompt is not evidence either way.
 
 ## WSL2 Ubuntu x64
 

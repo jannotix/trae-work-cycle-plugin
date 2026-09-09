@@ -16,8 +16,12 @@ candidate and invalidates prior certification receipts.
       the immutable public release tag.
 - [ ] Skill ZIP has root-level `SKILL.md`, `LICENSE`, and `NOTICE` and passes an
       extracted upload smoke in the pinned Trae Work version.
-- [ ] Windows executable is Authenticode-signed and timestamped; both runtime
-      archives include complete license and third-party attribution material.
+- [ ] Both runtime archives include complete license and third-party attribution
+      material.
+- [ ] The Windows executable is Authenticode-signed and timestamped, or the
+      listing and the release notes disclose that it is unsigned and that first
+      run shows a SmartScreen warning. No asset claims a signature it does not
+      carry.
 - [ ] Every release asset matches `MANIFEST.json`, `SHA256SUMS.txt`, and its
       GitHub provenance attestation.
 - [ ] Windows UI and WSL clean-install certification receipts bind the exact

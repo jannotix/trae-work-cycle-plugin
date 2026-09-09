@@ -104,15 +104,39 @@ jobs:
           workspaces: production
       - name: Build release binary from the lockfile
         run: cargo build --release --workspace --locked
+      # Signing is enforced when an identity exists and skipped when it does not.
+      # A missing certificate must not hold the release hostage, but an unsigned
+      # runtime must never be published silently: the warning below is the record.
+      - id: signing
+        name: Detect whether a code-signing identity is configured
+        shell: pwsh
+        env:
+          CYCLE_WINDOWS_CERTIFICATE_BASE64: ${{ secrets.WINDOWS_CODE_SIGNING_CERTIFICATE_BASE64 }}
+          CYCLE_WINDOWS_CERTIFICATE_THUMBPRINT: ${{ secrets.WINDOWS_CODE_SIGNING_CERTIFICATE_THUMBPRINT }}
+        run: |
+          $configured = -not (
+            [string]::IsNullOrWhiteSpace($env:CYCLE_WINDOWS_CERTIFICATE_BASE64) -and
+            [string]::IsNullOrWhiteSpace($env:CYCLE_WINDOWS_CERTIFICATE_THUMBPRINT)
+          )
+          "configured=$($configured.ToString().ToLowerInvariant())" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
+          if ($configured) {
+            Write-Host 'code-signing identity present: the Windows runtime is signed and its signature enforced'
+          } else {
+            Write-Host '::warning::No code-signing identity is configured. The Windows runtime will be published unsigned and its first run shows a SmartScreen warning. Release notes and listing must disclose this.'
+          }
       - name: Authenticode-sign and timestamp the Windows runtime
+        if: steps.signing.outputs.configured == 'true'
         shell: pwsh
         env:
           CYCLE_WINDOWS_CERTIFICATE_BASE64: ${{ secrets.WINDOWS_CODE_SIGNING_CERTIFICATE_BASE64 }}
           CYCLE_WINDOWS_CERTIFICATE_PASSWORD: ${{ secrets.WINDOWS_CODE_SIGNING_CERTIFICATE_PASSWORD }}
+          CYCLE_WINDOWS_CERTIFICATE_THUMBPRINT: ${{ secrets.WINDOWS_CODE_SIGNING_CERTIFICATE_THUMBPRINT }}
         run: ../tools/sign-windows.ps1 -Binary 'target/release/trae-cycle.exe'
       - name: Stage archive and smoke the extracted runtime
         shell: pwsh
-        run: ../tools/archive-runtime.ps1 -Binary 'target/release/trae-cycle.exe' -Platform 'windows-x64' -Output '${{ github.workspace }}/trae-cycle-windows-x64.zip' -RequireAuthenticode
+        env:
+          CYCLE_REQUIRE_AUTHENTICODE: ${{ steps.signing.outputs.configured }}
+        run: ../tools/archive-runtime.ps1 -Binary 'target/release/trae-cycle.exe' -Platform 'windows-x64' -Output '${{ github.workspace }}/trae-cycle-windows-x64.zip' -RequireAuthenticode:([bool]::Parse($env:CYCLE_REQUIRE_AUTHENTICODE))
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: trae-cycle-windows-x64

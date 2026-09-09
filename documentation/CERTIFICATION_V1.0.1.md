@@ -61,9 +61,9 @@ for a Trae Work UI row. Evidence from `1.0.0` is historical and is not inherited
 | ID | Check | Result | Evidence or blocking condition |
 | --- | --- | --- | --- |
 | P1 | 500,100-source-file benchmark exits 0 with `passed: true` under the unchanged 30-minute SLA | PARTIAL | Passed on cache-ceiling commit `123d481…` in 1,259,776 ms with an 898.1 MiB peak and zero parse errors; must rerun after the final source/report commit |
-| P2 | Windows runtime is Authenticode-signed and RFC 3161 timestamped | BLOCKED | No local code-signing certificate and no `windows-code-signing` environment secrets exist. The release workflow refuses unsigned bytes |
+| P2 | Windows runtime is Authenticode-signed and RFC 3161 timestamped | NOT CLAIMED FOR THIS RELEASE | No code-signing identity exists. Signing is now conditional: the release workflow signs and enforces the signature when `WINDOWS_CODE_SIGNING_CERTIFICATE_*` secrets are present, and otherwise emits a workflow warning and publishes an unsigned runtime. `1.0.1` therefore ships unsigned, first run shows SmartScreen, and artifact provenance rests on `SHA256SUMS.txt`, `MANIFEST.json` and the GitHub attestations. Signing becomes a mandatory gate again as soon as an identity is provisioned. Public wording must disclose the unsigned state |
 | P3 | Runtime archives are deterministic and preserve exact platform modes | PASS | Two Windows rehearsals produced identical SHA-256; WSL tar replay verified documents `0644` and executable `0755` |
-| P4 | Full release inventory, manifest, checksums, SBOM, secret scan, and provenance all verify | PARTIAL | The unsigned Windows candidate built at `05daf813…` passed extracted MCP smoke and release-secret scan. Full inventory, manifest, SBOM/provenance, final WSL asset, and signed Windows asset remain mandatory |
+| P4 | Full release inventory, manifest, checksums, SBOM, secret scan, and provenance all verify | PARTIAL | The unsigned Windows candidate built at `05daf813…` passed extracted MCP smoke and release-secret scan. Full inventory, manifest, SBOM/provenance and the final WSL asset remain mandatory on the sealed SHA. The Windows asset is no longer required to be signed, but must match its manifest entry and attestation |
 | P5 | Approval environments prevent unattended signing/publication | PASS | `windows-code-signing`: reviewer `jannotix`, branch `main` or tag `v*`; `production-release`: reviewer `jannotix`, tag `v*` only |
 | P6 | Marketplace bundle is accepted and submitted | BLOCKED | Listing, permissions, data flow, policies, install recipe, logo, and checklist are prepared. External submission waits for final public assets and owner confirmation at action time |
 
@@ -74,8 +74,10 @@ for a Trae Work UI row. Evidence from `1.0.0` is historical and is not inherited
    binary.
 2. Complete restart, update/reinstall, uninstall, and clean reinstall on Windows;
    complete the equivalent native CLI/MCP lifecycle on WSL.
-3. Supply a production code-signing identity as protected environment secrets,
-   approve the signing job, and verify the timestamped signature after extraction.
+3. Either supply a production code-signing identity as protected environment
+   secrets, approve the signing job and verify the timestamped signature after
+   extraction, or confirm that every public surface discloses the unsigned
+   runtime. This step no longer blocks the release; misdescribing it does.
 4. Record the final results, commit the completed matrix, and freeze that SHA.
 5. Rerun CI, the full 500k benchmark, clean Windows/WSL packaging and the
    non-publishing release workflow on that exact SHA.

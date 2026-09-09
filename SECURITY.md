@@ -36,8 +36,12 @@ all secrets and personal paths from logs before attaching them.
   endpoints require `api_key_env` or `api_key_file`; keys are resolved at call
   time and are excluded from logs, the ledger, and exports.
 - Release assets are accepted only when the source revision, version, manifest,
-  checksums, provenance attestations, archive inventory, and required Windows
-  Authenticode signature all verify.
+  checksums, provenance attestations, and archive inventory all verify. Windows
+  Authenticode signing is enforced whenever a code-signing identity is configured
+  for the release. A release published without one carries an unsigned executable,
+  states so in its notes, and is proved instead by its checksums and GitHub
+  provenance attestations. An unsigned runtime shows a SmartScreen warning on
+  first run.
 
 The detailed trust model and limitations are in
 [`documentation/THREAT_MODEL.md`](documentation/THREAT_MODEL.md).

@@ -1,0 +1,4 @@
+# Keys permitted to sign Cycle for Trae Work releases.
+# Verify a tag with:
+#   git -c gpg.ssh.allowedSignersFile=.github/allowed_signers tag -v <tag>
+203815265+jannotix@users.noreply.github.com ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIARVOuCi3CBkSfTjtYIZxb7OqSW/R0l/9hJBWD/qngkm

@@ -24,7 +24,7 @@ The only valid release verdicts are:
 
 | Surface | v1 status | Required evidence |
 | --- | --- | --- |
-| Windows 10/11 x64 CLI and Trae Work Desktop local environment | Certified | Clean-machine install, extracted Windows archive, MCP registration, skill and command activation, quick/full/repair cycles, restart, update, uninstall, signature, and exact hashes |
+| Windows 10/11 x64 CLI and Trae Work Desktop local environment | Certified | Clean-machine install, extracted Windows archive, MCP registration, skill and command activation, quick/full/repair cycles, restart, update, uninstall, and exact hashes. An Authenticode signature is required evidence only when a code-signing identity is configured; otherwise the unsigned state is required disclosure |
 | WSL2 Ubuntu x64 CLI/MCP runtime | Certified | Native ext4 checkout, extracted Linux archive with executable mode, quick/full/repair cycles, restart, update, uninstall, and exact hashes |
 | macOS | **compatible but untested** | Static/source compatibility only. No macOS result may replace a Windows or WSL receipt, and v1 carries no macOS support SLA |
 | Native Linux desktop outside WSL | Not a v1 Trae Work certification target | The Linux runtime artifact is certified for the WSL lane only |
@@ -56,8 +56,12 @@ runtime dependency. Trae Work keeps its native MCP, Skill, and Command surfaces.
    differ, but shared plugin/skill/command bytes must be identical.
 5. No receipt survives a source, lockfile, workflow, packaging, or documentation
    change that affects the release artifact or its claims.
-6. A failed mandatory test, benchmark, signature, host, or artifact check blocks
-   downstream publication. Timeouts and security checks are not relaxed to pass.
+6. A failed mandatory test, benchmark, host, or artifact check blocks downstream
+   publication. Timeouts and security checks are not relaxed to pass. Windows
+   Authenticode signing is mandatory whenever a code-signing identity is
+   configured and a signature that fails to verify always blocks; an absent
+   identity does not block, but publishing an unsigned runtime without saying so
+   does.
 7. Release evidence excludes credentials, role prompts, private endpoints,
    absolute personal paths, raw secrets, and unbounded process output.
 8. The tag `v1.0.0` is immutable and must not be moved or reused.
@@ -141,7 +145,10 @@ the product license, third-party notices, README, and its platform executable.
 
 ### T06 — Complete signing, compliance, privacy, and support
 
-- Authenticode-sign and timestamp the Windows executable before sealing it.
+- Authenticode-sign and timestamp the Windows executable before sealing it when a
+  code-signing identity is configured. Without one, publish unsigned and disclose
+  it in the release notes, the security policy, the support policy, the install
+  recipe and the marketplace listing.
 - Include complete redistributable license and attribution material in each
   runtime archive and give the Skill an explicit license.
 - Publish `SECURITY.md`, supported-version policy, private vulnerability channel,
@@ -169,7 +176,10 @@ the product license, third-party notices, README, and its platform executable.
 
 ### T09 — Publish and verify
 
-- Create a new annotated, signed `v1.0.1` or later tag; never move `v1.0.0`.
+- Create a new annotated tag `v1.0.1` or later, signed with the maintainer's SSH
+  signing key (`gpg.format = ssh`); never move `v1.0.0`. The tag signature proves
+  the provenance of the source; the GitHub attestations prove the provenance of
+  the built artifacts. Neither replaces the other, and neither is Authenticode.
 - Publish only the sealed bytes approved in T08.
 - Download every public asset by URL, verify hashes/attestations/signatures, and
   repeat clean-install smoke on Windows and WSL.
@@ -187,7 +197,7 @@ the product license, third-party notices, README, and its platform executable.
 | T03 | Implemented — `a9a8726` plus release/signing follow-ups; exact CI run 33286348988 passed Windows 2025, Ubuntu 24.04, RustSec, license and package contracts on `d5aa25b…`; tagless release-candidate workflow still requires default-branch integration and signing secrets |
 | T04 | Passed on `123d481`: raw receipt `passed: true`, total 1,259,776 ms, 898.1 MiB peak, 0 parse errors; final sealed-SHA rerun remains mandatory |
 | T05 | In progress — Trae Work Desktop 0.1.61 is pinned after a real in-place update from 0.1.54. The update preserved the task, Command, MCP registration and data directory; live `/cycle setup` and `/cycle doctor` now pass with all five loopback roles. The active Skill is updated to 1.0.1 with a verified rollback copy. The native quick workflow collector accepts the isolated project key, but its original-request/indexing footer is intermittently clipped or loses UI focus before a workflow starts; quick/full/restart/uninstall remain incomplete |
-| T06 | In progress — policies, license-bearing archives, private vulnerability reporting, signing script and approval environments complete; production Authenticode identity/secrets absent |
+| T06 | Implemented — policies, license-bearing archives, private vulnerability reporting, signing script and approval environments complete. Authenticode is now conditional on configured secrets, and every public surface discloses the unsigned runtime; a production signing identity remains desirable but no longer gates publication |
 | T07 | Prepared — manifest, permissions/data flow, install recipe, logo and checklist complete; external marketplace submission awaits final public assets and action-time owner confirmation |
 | T08–T09 | Blocked — final UI/signing receipts, final-SHA 500k rerun, sealed release candidate, publication approval and public verification remain mandatory |
 

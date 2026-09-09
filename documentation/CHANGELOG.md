@@ -6,6 +6,7 @@
 
 - Expiring, single-use verification-command consent bound to the workflow, frozen candidate, plan, gate, command vector, and worktree, with activation recorded in the audit ledger before execution.
 - Deterministic extracted-archive smoke tests, root-level Skill packaging, Windows Authenticode signing and timestamp gates, complete runtime license material, public security/privacy/support policies, and a fail-closed marketplace submission kit.
+- Source provenance through SSH-signed release tags, alongside the existing GitHub build-provenance attestations for the artifacts.
 
 ### Changed
 
@@ -19,6 +20,7 @@
 
 - Worktree isolation is explicitly not described as an operating-system sandbox. Nonpreapproved project commands cannot execute without an exact user consent receipt.
 - Marketing and privacy material now disclose every configured network role boundary and no longer describe the product as fully local when remote role endpoints are used.
+- Windows Authenticode signing is now conditional on a configured code-signing identity instead of an unconditional release gate. When secrets are present the runtime is signed and the signature enforced after extraction, exactly as before; when they are absent the release workflow emits a warning and publishes an unsigned runtime. This release ships unsigned, so its first run shows a SmartScreen warning, and every public surface — release notes, security policy, support policy, install recipe, README and marketplace listing — now says so. Artifact provenance rests on `SHA256SUMS.txt`, `MANIFEST.json` and the GitHub attestations. A signature that fails to verify still blocks publication; only its absence no longer does.
 
 ## 1.0.0 (2026-08-24)
 

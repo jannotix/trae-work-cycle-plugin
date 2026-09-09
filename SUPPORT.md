@@ -28,8 +28,9 @@ Security issues must follow [`SECURITY.md`](SECURITY.md).
 2. Back up the configured Cycle data directory with `trae-cycle backup` and
    preserve its hash outside that directory.
 3. Download the new immutable release assets. Verify `SHA256SUMS.txt`,
-   `MANIFEST.json`, GitHub provenance attestations, and the Authenticode signature
-   of the extracted Windows executable before running it.
+   `MANIFEST.json`, and the GitHub provenance attestations before running the
+   executable. When the release notes state that the Windows runtime is signed,
+   also verify its Authenticode signature and trusted timestamp.
 4. Stop the local MCP server. Replace the executable only with the verified
    platform asset; then update the Skill and Command from the same release.
 5. Start Trae Work and run `/cycle doctor` followed by `/cycle history verify`.
