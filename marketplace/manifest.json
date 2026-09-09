@@ -10,9 +10,9 @@
   "repository": "https://github.com/jannotix/trae-work-cycle-plugin",
   "homepage": "https://github.com/jannotix/trae-work-cycle-plugin",
   "license": "FSL-1.1-MIT",
-  "security": "https://github.com/jannotix/trae-work-cycle-plugin/blob/main/SECURITY.md",
-  "privacy": "https://github.com/jannotix/trae-work-cycle-plugin/blob/main/PRIVACY.md",
-  "support": "https://github.com/jannotix/trae-work-cycle-plugin/blob/main/SUPPORT.md",
+  "security": "https://github.com/jannotix/trae-work-cycle-plugin/blob/v1.0.1/SECURITY.md",
+  "privacy": "https://github.com/jannotix/trae-work-cycle-plugin/blob/v1.0.1/PRIVACY.md",
+  "support": "https://github.com/jannotix/trae-work-cycle-plugin/blob/v1.0.1/SUPPORT.md",
   "keywords": [
     "delivery",
     "code-review",

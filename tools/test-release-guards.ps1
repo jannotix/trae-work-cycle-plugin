@@ -43,6 +43,21 @@ try {
             throw "Windows signing script is missing: $required"
         }
     }
+
+    # A listing link to a mutable branch is a link that can start lying after
+    # submission. The submission checklist requires the policy links to resolve
+    # at the immutable release tag; this is that requirement, enforced.
+    $manifest = Get-Content (Join-Path $root 'marketplace/manifest.json') -Raw | ConvertFrom-Json
+    if (-not $manifest.version) { throw 'marketplace manifest is missing its version' }
+    $expectedPrefix = "https://github.com/jannotix/trae-work-cycle-plugin/blob/v$($manifest.version)/"
+    foreach ($field in @('security', 'privacy', 'support')) {
+        $link = $manifest.$field
+        if (-not $link) { throw "marketplace manifest is missing the '$field' link" }
+        if (-not $link.StartsWith($expectedPrefix, [StringComparison]::Ordinal)) {
+            throw "marketplace manifest '$field' link must resolve at the immutable tag v$($manifest.version), found: $link"
+        }
+    }
+
     Write-Host 'release guard tests passed'
 } finally {
     if ((Test-Path -LiteralPath $fixture) -and $fixture.StartsWith($tempRoot, [StringComparison]::OrdinalIgnoreCase)) {
