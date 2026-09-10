@@ -426,8 +426,12 @@ pub fn descriptors() -> Vec<Value> {
         ),
         tool(
             "cycle_limits",
-            "Show the live admission policy and resource reserves.",
-            json!({}),
+            "Show the live admission policy and resource reserves. operation 'usage' reports what a project's candidates retain and how much a prune would return; 'prune' releases the retained bytes of finished workflows' candidates, keeping every row, digest and history link.",
+            json!({
+                "confirm": {"type": "boolean"},
+                "operation": {"type": "string", "enum": ["policy", "usage", "prune"]},
+                "project_key": project_key(),
+            }),
             &[],
         ),
         tool(
@@ -567,7 +571,7 @@ pub async fn call(ctx: &ToolContext, name: &str, args: &Value) -> Result<Value, 
         "cycle_history" => history(ctx, args).await,
         "cycle_history_verify" => history_verify(ctx, args).await,
         "cycle_models" => models(ctx).await,
-        "cycle_limits" => limits(ctx).await,
+        "cycle_limits" => limits(ctx, args).await,
         "cycle_export" => export(ctx, args).await,
         _ => Err(format!("unknown tool {name}")),
     }
@@ -1450,9 +1454,27 @@ async fn models(ctx: &ToolContext) -> Result<Value, String> {
     Ok(report)
 }
 
-async fn limits(ctx: &ToolContext) -> Result<Value, String> {
+async fn limits(ctx: &ToolContext, args: &Value) -> Result<Value, String> {
+    let operation = opt_str_arg(args, "operation")?.unwrap_or_else(|| "policy".to_owned());
     ctx.daemon.ensure().await?;
-    control(ctx, "limits", ControlOperation::Limits, None).await
+    match operation.as_str() {
+        // The admission policy is a property of the machine, not of a project.
+        "policy" => control(ctx, "limits", ControlOperation::Limits, None).await,
+        "usage" => {
+            let project_key = str_arg(args, "project_key")?;
+            control(ctx, &project_key, ControlOperation::Usage, None).await
+        }
+        // Pruning gives bytes back and cannot be undone, so it is confirmed like any other
+        // destructive operation -- even though every row, digest and history link survives it.
+        "prune" => {
+            let project_key = str_arg(args, "project_key")?;
+            require_confirm(args)?;
+            control(ctx, &project_key, ControlOperation::Prune, None).await
+        }
+        other => Err(format!(
+            "unknown limits operation '{other}': expected policy, usage or prune"
+        )),
+    }
 }
 
 async fn spawn_job<F>(jobs: &Arc<Jobs>, tool: &str, work: F) -> Value

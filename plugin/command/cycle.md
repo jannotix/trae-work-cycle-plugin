@@ -25,7 +25,7 @@ Parse the command text after `/cycle`. The subcommand is the first token, with a
 - **memory ...** — Memory operations: `cycle_memory_search`, `cycle_memory_explain`. Removal requires explicit user confirmation, then `cycle_memory_remove` with `confirm: true`.
 - **history [verify]** — `cycle_history`; with `verify`, `cycle_history_verify`. On verification failure stop and preserve data.
 - **models** — `cycle_models`: effective role assignments and usage totals, no secrets.
-- **limits** — `cycle_limits`: admission policy and resource reserves.
+- **limits [usage | prune --confirm]** — `cycle_limits`: admission policy and resource reserves. With `usage`, what this project's candidates retain and what a prune would give back. With `prune`, requires the literal `--confirm` and explicit user approval, then `cycle_limits` with `operation: "prune"` and `confirm: true`; it frees only the bytes of completed or cancelled workflows' candidates and keeps every digest and history link.
 - **permissions** — `cycle_doctor`: effective configuration and control plane state; permission-relevant facts live there and in `cycle_limits`.
 - **setup** — `cycle_setup`; relay any configuration fix needed before cycles can start.
 - **doctor** — `cycle_doctor`; explain each issue in plain language.

@@ -230,7 +230,7 @@ All tools are namespaced `cycle_*`. Long-running operations follow the job patte
 | `cycle_memory_search` / `cycle_memory_explain` / `cycle_memory_remove` | Project memory |
 | `cycle_history` / `cycle_history_verify` | Redacted audit query; chain verification |
 | `cycle_models` | Effective per-role assignments without secrets |
-| `cycle_limits` | Live admission policy and resource reserves |
+| `cycle_limits` | Live admission policy and resource reserves; candidate-byte usage and pruning for finished workflows |
 | `cycle_export` | Redacted history export with confirmation |
 
 Every tool result is plain structured data the skill relays verbatim. The daemon is the authority: role outputs that do not satisfy the binding rules are rejected regardless of what the skill or model claims.

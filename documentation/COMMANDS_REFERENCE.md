@@ -26,7 +26,7 @@ Version 1.0.1. Two surfaces exist: the `/cycle` command inside Trae Work and the
 | `memory ...` | `cycle_memory_*` | Search, explain; removal requires confirmation. |
 | `history [verify]` | `cycle_history` / `cycle_history_verify` | Redacted trail; chain verification. On verification failure: stop and preserve. |
 | `models` | `cycle_models` | Effective role assignments and token usage, no secrets. |
-| `limits` | `cycle_limits` | Live admission policy and resource reserves. |
+| `limits [usage \| prune --confirm]` | `cycle_limits` | Live admission policy and resource reserves. `usage` reports what this project's candidates retain and what a prune would return; `prune --confirm` releases the retained bytes of finished workflows' candidates. |
 | `permissions` | `cycle_doctor` | Effective configuration and control-plane state. |
 | `setup` | `cycle_setup` | Validates installation; reports fixes needed. |
 | `doctor` | `cycle_doctor` | Read-only diagnostics with plain-language fixes. |
@@ -42,7 +42,7 @@ Version 1.0.1. Two surfaces exist: the `/cycle` command inside Trae Work and the
 | `cycle_setup` | Role configuration, Git availability, writable data directory, control-plane health. |
 | `cycle_doctor` | Read-only diagnostics: control plane, database, ledger, roles. |
 | `cycle_models` | Assignments plus per-role token usage; never secrets. |
-| `cycle_limits` | Admission policy: active ceiling, lease, reserves, repair budget. |
+| `cycle_limits` | `operation` `policy` (default), `usage` or `prune`. `policy` reports the admission policy: active ceiling, lease, reserves, repair budget. `usage` and `prune` need `project_key`; `prune` also needs `confirm: true`. Pruning releases only the retained bytes of candidates belonging to completed or cancelled workflows: every row, manifest, per-file digest, evidence record and history link survives it, and a pruned candidate refuses delivery as one whose payload never arrived. |
 
 ### Workflow lifecycle
 

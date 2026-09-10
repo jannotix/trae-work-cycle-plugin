@@ -25,6 +25,27 @@ pub fn execute(
         return limits();
     }
     let project_id = ProjectId::from_stable_key(project_key);
+    // Retention answers for the project, not for one workflow: a project whose every workflow has
+    // finished still has bytes to account for, and resolving a current workflow would refuse it.
+    if operation == ControlOperation::Usage {
+        return usage(store, project_id);
+    }
+    if operation == ControlOperation::Prune {
+        let freed = store
+            .prune_candidate_payloads(project_id)
+            .map_err(|error| error.to_string())?;
+        let remaining = store
+            .storage_usage(project_id)
+            .map_err(|error| error.to_string())?;
+        return Ok(json!({
+            "freed": {
+                "bytes": freed.bytes,
+                "candidates": freed.candidates,
+                "files": freed.files,
+            },
+            "remaining": usage_value(&remaining),
+        }));
+    }
     let workflow_id = if let Some(workflow_id) = requested_workflow_id {
         let owner = store
             .load_request(workflow_id)
@@ -135,10 +156,36 @@ pub fn execute(
                 "workflowId": workflow_id,
             }))
         }
-        ControlOperation::Doctor | ControlOperation::Limits => {
-            unreachable!("global operations are handled before workflow lookup")
+        ControlOperation::Doctor
+        | ControlOperation::Limits
+        | ControlOperation::Prune
+        | ControlOperation::Usage => {
+            unreachable!("project-wide operations are handled before workflow lookup")
         }
     }
+}
+
+fn usage(store: &Store, project_id: ProjectId) -> Result<Value, String> {
+    let usage = store
+        .storage_usage(project_id)
+        .map_err(|error| error.to_string())?;
+    Ok(usage_value(&usage))
+}
+
+/// What a prune would return, and what it would leave. Pruning keeps every row, digest and
+/// history link: only the retained bytes of finished workflows' candidates go.
+fn usage_value(usage: &workflow_store::StorageUsage) -> Value {
+    json!({
+        "candidates": usage.candidates,
+        "prunable": {
+            "bytes": usage.prunable_bytes,
+            "candidates": usage.prunable_candidates,
+            "files": usage.prunable_files,
+            "workflows": usage.prunable_workflows,
+        },
+        "retained": {"bytes": usage.retained_bytes, "files": usage.retained_files},
+        "workflows": usage.workflows,
+    })
 }
 
 fn limits() -> Result<Value, String> {
@@ -171,9 +218,11 @@ fn command(operation: ControlOperation, state: WorkflowState) -> WorkflowCommand
         ControlOperation::Doctor
         | ControlOperation::Evidence
         | ControlOperation::Limits
+        | ControlOperation::Prune
         | ControlOperation::Recovery
         | ControlOperation::Status
-        | ControlOperation::Tasks => {
+        | ControlOperation::Tasks
+        | ControlOperation::Usage => {
             unreachable!("read operation cannot become a workflow command")
         }
     }

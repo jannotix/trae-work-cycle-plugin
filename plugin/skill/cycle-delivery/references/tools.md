@@ -9,7 +9,7 @@ All operations are exposed by the `trae-cycle` MCP server. The schema returned b
 | `cycle_setup` | Validates installation: role configuration, Git availability, writable data directory, control plane health. Run once per project before the first cycle. |
 | `cycle_doctor` | Read-only diagnostics for the control plane, database, ledger and role configuration, with plain-language fixes. |
 | `cycle_models` | Effective per-role model assignments without secrets, plus per-role token usage totals. |
-| `cycle_limits` | Live admission policy: active workflow ceiling, lease duration, resource reserves, repair budget. |
+| `cycle_limits` | `operation` `policy` (default), `usage` or `prune`. `policy`: active workflow ceiling, lease duration, resource reserves, repair budget. `usage` (needs `project_key`): bytes this project's candidates retain and what a prune would return. `prune` (needs `project_key` and `confirm: true` after explicit user approval): releases the retained bytes of completed and cancelled workflows' candidates, keeping every row, digest, evidence record and history link. |
 
 ## Workflow Lifecycle
 

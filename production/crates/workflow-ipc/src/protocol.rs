@@ -46,11 +46,13 @@ pub enum ControlOperation {
     Evidence,
     Limits,
     Pause,
+    Prune,
     Recovery,
     Resume,
     Retry,
     Status,
     Tasks,
+    Usage,
 }
 
 #[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
