@@ -6,6 +6,14 @@
 
 Cycle for Trae Work is a native Trae Work integration for evidence-gated software delivery. It coordinates five isolated roles without replacing Trae Work planning, browsing or review capabilities.
 
+> **This page describes 1.0.1, which is not released yet.** Its release candidate is certified on
+> the control plane but not through the Trae Work interface, so the install steps below name assets
+> — the WSL archive above all — that no published release carries. The only published version is
+> [v1.0.0](https://github.com/jannotix/trae-work-cycle-plugin/releases/tag/v1.0.0); read the errata
+> in its release notes before installing it, because its own documentation overstates what was
+> certified. [`documentation/CERTIFICATION_V1.0.1.md`](documentation/CERTIFICATION_V1.0.1.md) records
+> what still blocks 1.0.1.
+
 ## What it is
 
 A locally operated Trae Work integration that coordinates five isolated roles:
