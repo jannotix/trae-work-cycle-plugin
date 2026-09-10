@@ -322,6 +322,7 @@ fn freeze_and_verify(
 fn consult_arbiter(
     client: &mut McpClient,
     project_key: &str,
+    workflow_id: &str,
     candidate: &VerifiedCandidate,
     requirement_ids: &[&str],
 ) -> Value {
@@ -342,10 +343,44 @@ fn consult_arbiter(
             "request": request,
             "role": "arbiter",
             "session_id": "cert-session",
+            "workflow_id": workflow_id,
         }),
     );
     assert_eq!(consulted["output"]["binding"], true);
     consulted["output"]["verdict"].clone()
+}
+
+/// The plane supplies the reviews itself, so it must refuse to consult the arbiter at all when it
+/// cannot: an arbitration formed without them is the one that approves over a rejection.
+fn arbiter_consultation_error(
+    client: &mut McpClient,
+    project_key: &str,
+    workflow_id: Option<&str>,
+    candidate: &VerifiedCandidate,
+) -> String {
+    let mut arguments = json!({
+        "operation": "arbiter_verdict",
+        "project_key": project_key,
+        "request": json!({"candidateDigest": candidate.candidate_digest}).to_string(),
+        "role": "arbiter",
+        "session_id": "cert-session",
+    });
+    if let Some(workflow_id) = workflow_id {
+        arguments["workflow_id"] = json!(workflow_id);
+    }
+    let response = client.request(
+        "tools/call",
+        json!({"arguments": arguments, "name": "cycle_role"}),
+    );
+    let result = &response["result"];
+    assert_eq!(
+        result["isError"], true,
+        "the arbiter consultation must be refused: {result}"
+    );
+    result["content"][0]["text"]
+        .as_str()
+        .unwrap_or_default()
+        .to_owned()
 }
 
 fn arbitrate_and_promote(
@@ -356,7 +391,7 @@ fn arbitrate_and_promote(
     candidate: &VerifiedCandidate,
     requirement_ids: &[&str],
 ) -> Value {
-    let verdict = consult_arbiter(client, project_key, candidate, requirement_ids);
+    let verdict = consult_arbiter(client, project_key, workflow_id, candidate, requirement_ids);
     let arbitrated = start_tool_job(
         client,
         project_key,
@@ -588,6 +623,21 @@ fn full_cycle_requires_two_blind_reviews_and_repairs_once() {
     git(&worktree_path, &["add", "-A"]);
     git(&worktree_path, &["commit", "-m", "first candidate"]);
     let first = freeze_and_verify(&mut client, "cert-full", &workflow_id, &base_revision);
+    // The plane hands the arbiter the reviews rather than trusting the caller to, so it refuses
+    // the consultation when it has no workflow to read them from, and again while a full-mode
+    // candidate does not yet have both. An arbiter that never saw a rejection is the one that
+    // approves over it.
+    let without_workflow = arbiter_consultation_error(&mut client, "cert-full", None, &first);
+    assert!(
+        without_workflow.contains("requires workflow_id"),
+        "unexpected refusal: {without_workflow}"
+    );
+    let before_reviews =
+        arbiter_consultation_error(&mut client, "cert-full", Some(&workflow_id), &first);
+    assert!(
+        before_reviews.contains("both independent reviews"),
+        "unexpected refusal: {before_reviews}"
+    );
     review_candidate(&mut client, &first);
 
     let request = json!({
@@ -602,7 +652,8 @@ fn full_cycle_requires_two_blind_reviews_and_repairs_once() {
         "cert-full",
         "cycle_role",
         json!({"operation": "arbiter_verdict", "project_key": "cert-full",
-               "request": request, "role": "arbiter", "session_id": "cert-session"}),
+               "request": request, "role": "arbiter", "session_id": "cert-session",
+               "workflow_id": workflow_id}),
     )["output"]["verdict"]
         .clone();
     let rejected = start_tool_job(

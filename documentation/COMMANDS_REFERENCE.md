@@ -70,7 +70,7 @@ Version 1.0.1. Two surfaces exist: the `/cycle` command inside Trae Work and the
 
 | Tool | Notes |
 | --- | --- |
-| `cycle_role` **job** | Operation and role must be paired: `architect_consult`/`architect`, `functional_review`/`functional_reviewer`, `security_review`/`security_reviewer`, `arbiter_readiness` and `arbiter_verdict`/`arbiter`. `executor_feasibility` fails closed — executor analysis stays in the Trae Work session. Advisory operations return advisory objects; verdict operations return binding payloads submitted unmodified through `cycle_review` / `cycle_arbitrate`. |
+| `cycle_role` **job** | Operation and role must be paired: `architect_consult`/`architect`, `functional_review`/`functional_reviewer`, `security_review`/`security_reviewer`, `arbiter_readiness` and `arbiter_verdict`/`arbiter`. `arbiter_verdict` also requires `workflow_id`: the control plane hands the arbiter the recorded reviews itself, and refuses the consultation without a workflow or while a full-mode candidate lacks either review. `executor_feasibility` fails closed — executor analysis stays in the Trae Work session. Advisory operations return advisory objects; verdict operations return binding payloads submitted unmodified through `cycle_review` / `cycle_arbitrate`. |
 
 ### Goals
 

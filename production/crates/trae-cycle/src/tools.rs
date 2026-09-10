@@ -272,13 +272,14 @@ pub fn descriptors() -> Vec<Value> {
         ),
         tool(
             "cycle_role",
-            "Consult a single role without starting a delivery cycle. Remote consultations run as jobs.",
+            "Consult a single role without starting a delivery cycle. Remote consultations run as jobs. arbiter_verdict additionally requires workflow_id: the control plane supplies the recorded reviews itself rather than trusting the caller to include them.",
             json!({
                 "operation": {"type": "string", "enum": ["architect_consult", "executor_feasibility", "functional_review", "security_review", "arbiter_readiness", "arbiter_verdict"]},
                 "project_key": project_key(),
                 "request": {"type": "string", "minLength": 1},
                 "role": {"type": "string", "enum": ["architect", "executor", "functional_reviewer", "security_reviewer", "arbiter"]},
                 "session_id": {"type": "string"},
+                "workflow_id": {"type": "string"},
             }),
             &["operation", "role", "request"],
         ),
@@ -1120,11 +1121,71 @@ async fn role(ctx: &ToolContext, args: &Value) -> Result<Value, String> {
     let session_id = opt_str_arg(args, "session_id")?;
     let project_key =
         opt_str_arg(args, "project_key")?.unwrap_or_else(|| "consultations".to_owned());
+    // The arbiter decides over both reviews, and until now it saw them only if the caller had put
+    // them in the request. A verdict could therefore be formed without ever being shown a
+    // rejection -- which is how an approval over one gets produced in the first place. The plane
+    // reads them from its own record and supplies them itself, and refuses when it cannot.
+    let recorded = if operation == RoleOperation::ArbiterVerdict {
+        let workflow_id = opt_id_arg(args, "workflow_id")?.ok_or_else(|| {
+            "arbiter_verdict requires workflow_id: the control plane supplies the recorded reviews"
+                .to_owned()
+        })?;
+        ctx.daemon.ensure().await?;
+        let recovery = control(
+            ctx,
+            &project_key,
+            ControlOperation::Recovery,
+            Some(workflow_id),
+        )
+        .await?;
+        Some(recorded_context(&recovery)?)
+    } else {
+        None
+    };
     let context = ctx.clone();
     Ok(spawn_job(&ctx.jobs, "cycle_role", async move {
-        run_role_call(context, config, operation, request, session_id, project_key).await
+        run_role_call(
+            context,
+            config,
+            operation,
+            request,
+            recorded,
+            session_id,
+            project_key,
+        )
+        .await
     })
     .await)
+}
+
+/// What the control plane holds against this candidate, rendered for the arbiter's system message,
+/// and a refusal when a full-mode candidate does not yet have both reviews to hold.
+fn recorded_context(recovery: &Value) -> Result<String, String> {
+    let reviews = recovery
+        .get("reviews")
+        .and_then(Value::as_array)
+        .ok_or_else(|| "the control plane did not return the recorded reviews".to_owned())?;
+    let mode = recovery.get("mode").and_then(Value::as_str).unwrap_or("");
+    if mode == "full" && reviews.len() != 2 {
+        return Err(format!(
+            "a full-mode arbitration needs both independent reviews; the control plane holds {}",
+            reviews.len()
+        ));
+    }
+    let recorded = serde_json::to_string_pretty(&json!({
+        "candidateDigest": recovery.get("candidateDigest"),
+        "mode": recovery.get("mode"),
+        "originalRequest": recovery.get("originalRequest"),
+        "recordedReviews": reviews,
+    }))
+    .map_err(|error| error.to_string())?;
+    Ok(format!(
+        "The control plane recorded the following against this candidate, and it is authoritative: \
+         where the user message disagrees with it, this is what happened. A rejection by either \
+         independent reviewer binds. Approving over one is refused by the plane and routed to \
+         repair, so disagreeing means rejecting with a repair target and your reasoning on \
+         record.\n\n{recorded}"
+    ))
 }
 
 async fn run_role_call(
@@ -1132,6 +1193,7 @@ async fn run_role_call(
     config: RolesFile,
     operation: RoleOperation,
     request: String,
+    recorded: Option<String>,
     session_id: Option<String>,
     project_key: String,
 ) -> Result<Value, String> {
@@ -1171,7 +1233,13 @@ async fn run_role_call(
         RoleOperation::ArbiterVerdict => {
             let call = ctx
                 .roles
-                .arbitration(&config, &ctx.data_dir, &request, &ctx.usage)
+                .arbitration(
+                    &config,
+                    &ctx.data_dir,
+                    &request,
+                    recorded.as_deref(),
+                    &ctx.usage,
+                )
                 .await?;
             (json!({"binding": true, "verdict": call.result}), call.usage)
         }

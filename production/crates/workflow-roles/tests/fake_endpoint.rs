@@ -372,6 +372,61 @@ async fn review_rejects_a_verdict_bound_to_the_wrong_role() {
     assert!(!error.is_transient());
 }
 
+/// The plane's record reaches the arbiter in the system message and the caller's request reaches
+/// it unchanged. Both halves matter: an arbiter that never sees the reviews approves over a
+/// rejection, and a request rewritten on its way to the role that judges against it is no longer
+/// the request.
+#[tokio::test]
+async fn the_recorded_reviews_ride_in_the_system_message_and_leave_the_request_verbatim() {
+    let directory = tempfile::tempdir().unwrap();
+    let fixture = ArbiterVerdict {
+        decision: ArbiterDecision::Approved,
+        candidate_digest: ContentDigest::of(b"fixture-candidate"),
+        findings: Vec::new(),
+        repair_target: None,
+        requirements: Vec::new(),
+    };
+    let fake = start_fake(vec![Script::ok(
+        serde_json::to_value(&fixture).unwrap(),
+        None,
+    )]);
+    let config = setup_roles(directory.path(), &fake.base_url);
+    let client = RolesClient::new(RESPONSE_TIMEOUT);
+
+    client
+        .arbitration(
+            &config,
+            directory.path(),
+            "the exact caller request",
+            Some("RECORDED: the security reviewer rejected this candidate"),
+            &UsageLedger::new(),
+        )
+        .await
+        .expect("arbitration call");
+
+    let captured = fake
+        .requests
+        .recv_timeout(Duration::from_secs(5))
+        .expect("captured request");
+    let messages = captured.body["messages"]
+        .as_array()
+        .expect("chat messages")
+        .clone();
+    let system = messages[0]["content"].as_str().expect("system message");
+    assert!(
+        system.contains("RECORDED: the security reviewer rejected this candidate"),
+        "the recorded reviews must reach the arbiter: {system}"
+    );
+    assert!(
+        system.contains("arbiter"),
+        "the plane's own prompt must survive beside the record: {system}"
+    );
+    assert_eq!(
+        messages[1]["content"], "the exact caller request",
+        "the caller's request must reach the arbiter verbatim"
+    );
+}
+
 #[tokio::test]
 async fn arbiter_verdict_is_parsed_strictly() {
     let directory = tempfile::tempdir().unwrap();
@@ -394,6 +449,7 @@ async fn arbiter_verdict_is_parsed_strictly() {
             &config,
             directory.path(),
             "decide over request, candidate, evidence and reviews",
+            None,
             &UsageLedger::new(),
         )
         .await
@@ -418,7 +474,13 @@ async fn malformed_arbiter_output_is_a_permanent_error() {
     let client = RolesClient::new(RESPONSE_TIMEOUT);
 
     let error = client
-        .arbitration(&config, directory.path(), "decide", &UsageLedger::new())
+        .arbitration(
+            &config,
+            directory.path(),
+            "decide",
+            None,
+            &UsageLedger::new(),
+        )
         .await
         .expect_err("malformed verdict");
 
@@ -485,7 +547,13 @@ async fn unreadable_key_files_fail_closed() {
     let client = RolesClient::new(RESPONSE_TIMEOUT);
 
     let error = client
-        .arbitration(&config, directory.path(), "decide", &UsageLedger::new())
+        .arbitration(
+            &config,
+            directory.path(),
+            "decide",
+            None,
+            &UsageLedger::new(),
+        )
         .await
         .expect_err("missing key");
 

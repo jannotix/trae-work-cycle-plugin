@@ -85,7 +85,7 @@ double-encode it, omit nested fields, or send `plan` and `plan_json` together.
 
 | Tool | Purpose |
 | --- | --- |
-| `cycle_role` **job** | Single-role consultation. Arguments: `operation`, `role`, `request`, optional `project_key`, `session_id`. The operation and role must be paired: `architect_consult`/`architect`, `functional_review`/`functional_reviewer`, `security_review`/`security_reviewer`, `arbiter_readiness` and `arbiter_verdict`/`arbiter`. `executor_feasibility` fails closed: executor analysis happens in the TRAE Work session. Advisory operations return an advisory object; review and arbitration operations return binding verdicts that must be submitted unmodified through `cycle_review` / `cycle_arbitrate`. |
+| `cycle_role` **job** | Single-role consultation. Arguments: `operation`, `role`, `request`, optional `project_key`, `session_id`, `workflow_id`. The operation and role must be paired: `architect_consult`/`architect`, `functional_review`/`functional_reviewer`, `security_review`/`security_reviewer`, `arbiter_readiness` and `arbiter_verdict`/`arbiter`. `arbiter_verdict` additionally requires `workflow_id`: the control plane supplies the recorded reviews from its own store rather than trusting the caller to include them, and refuses when a full-mode candidate does not yet have both. Your `request` reaches the role verbatim. `executor_feasibility` fails closed: executor analysis happens in the TRAE Work session. Advisory operations return an advisory object; review and arbitration operations return binding verdicts that must be submitted unmodified through `cycle_review` / `cycle_arbitrate`. |
 
 ## Goals
 

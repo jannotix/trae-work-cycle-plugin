@@ -22,6 +22,8 @@
 
   Ported from the same defect in Cycle for Claude Code, which found it during its first governed cycle where the two reviewers split. Trae Work had never reached that state, because no full cycle with two blind reviews has yet completed through the host — which is exactly the row this would have blocked.
 
+- The arbiter saw the independent reviews only if the caller had put them in the request, so a binding verdict could be formed without ever being shown a rejection — which is how an approval over one gets produced in the first place. `cycle_role` with `arbiter_verdict` now requires `workflow_id`, reads the recorded reviews from the control plane's own store, and refuses the consultation when it has no workflow to read them from or when a full-mode candidate does not yet hold both. The record rides in the arbiter's system message beside the plane's prompt, so the caller's request still reaches the role that judges against it verbatim.
+
 ### Security
 
 - Worktree isolation is explicitly not described as an operating-system sandbox. Nonpreapproved project commands cannot execute without an exact user consent receipt.

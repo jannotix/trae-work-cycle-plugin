@@ -179,22 +179,27 @@ impl RolesClient {
         })
     }
 
+    /// `recorded` is what the control plane holds against this candidate -- both reviews above all.
+    /// It rides in the system message, beside the plane's own prompt, so the caller's request
+    /// reaches the arbiter verbatim: this product does not let a request be rewritten on its way
+    /// to the role that judges against it.
     pub async fn arbitration(
         &self,
         config: &RolesFile,
         data_dir: &Path,
         request: &str,
+        recorded: Option<&str>,
         usage: &UsageLedger,
     ) -> Result<RoleCall<ArbiterVerdict>, RoleError> {
         let endpoint = endpoint_for(config, RoleOperation::ArbiterVerdict.role())?;
         let api_key = resolve_key(endpoint, data_dir)?;
+        let prompt = prompts::arbiter_verdict_prompt();
+        let system = match recorded {
+            Some(recorded) => format!("{prompt}\n\n{recorded}"),
+            None => prompt.to_owned(),
+        };
         let (content, completion) = self
-            .chat(
-                endpoint,
-                api_key.as_deref(),
-                prompts::arbiter_verdict_prompt(),
-                request,
-            )
+            .chat(endpoint, api_key.as_deref(), &system, request)
             .await?;
         usage
             .record(
