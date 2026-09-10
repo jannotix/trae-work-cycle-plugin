@@ -9,6 +9,8 @@ Create this command once in TRAE Work: Settings → Commands → Create, environ
 
 Load the `cycle-delivery` skill before executing any governed operation. The control plane is the authority; relay its results verbatim.
 
+If the `cycle_*` tools are not available or the control plane does not answer, stop and say so: name whether the `trae-cycle` MCP server is missing from Trae Work settings or is failing to start, and point at `/cycle doctor`. Never do the requested work by hand instead — a change with no candidate, no gate and no record is the failure this plugin exists to prevent, and it arrives through a broken installation as easily as through a bad model.
+
 Parse the command text after `/cycle`. The subcommand is the first token, with a leading colon accepted (`/cycle:resume` equals `/cycle resume`). Everything after the first token is the subcommand's argument text.
 
 - **run [auto|quick|full]** — Arm a mode (default `auto`). Confirm the armed mode, then tell the user the next message becomes the immutable original request. On the next non-command message, start the cycle with `cycle_start` and follow the skill's phase protocol.
