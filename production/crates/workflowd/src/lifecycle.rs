@@ -532,6 +532,7 @@ where
             } => {
                 let result = plan_verification(
                     Arc::clone(&store),
+                    Arc::clone(&database),
                     Arc::clone(&worktrees),
                     plan_id,
                     project_key,
@@ -1395,6 +1396,7 @@ fn review_role_name(role: workflow_core::WorkflowRole) -> Result<&'static str, S
 
 async fn plan_verification(
     store: Arc<tokio::sync::Mutex<Store>>,
+    database: Arc<PathBuf>,
     worktrees: Arc<PathBuf>,
     plan_id: workflow_core::VerificationPlanId,
     project_key: String,
@@ -1432,7 +1434,19 @@ async fn plan_verification(
         .join(project_id.to_string())
         .join(workflow_id.to_string());
     let plan = tokio::task::spawn_blocking(move || {
-        crate::verification::discover_for(&path, &architecture, plan_id)
+        // The reach is advisory input to gate discovery: it can only widen the scope set, and a
+        // graph that cannot answer produces a recorded uncertainty rather than a missing gate.
+        // Failing to open the graph is therefore not a reason to fail the plan.
+        let scopes = architecture
+            .tasks
+            .iter()
+            .flat_map(|task| task.write_scopes.iter())
+            .cloned()
+            .collect::<BTreeSet<_>>();
+        let reach = workflow_code_intel::graph::GraphStore::open(&*database)
+            .and_then(|graph| graph.reach_of_scopes(project_id, &scopes))
+            .ok();
+        crate::verification::discover_for(&path, &architecture, plan_id, reach.as_ref())
             .map_err(|error| error.to_string())
     })
     .await

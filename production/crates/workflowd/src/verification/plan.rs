@@ -115,13 +115,17 @@ pub fn discover(
     repository: &Path,
     architecture: &ArchitecturePlan,
 ) -> Result<VerificationPlan, VerificationPlanError> {
-    discover_for(repository, architecture, VerificationPlanId::new())
+    discover_for(repository, architecture, VerificationPlanId::new(), None)
 }
 
+/// `reach` is what the code graph says the authorized write scopes reach. It only ever widens the
+/// set the layer rules are matched against, so a wrong answer costs a proof that was not needed
+/// and never one that was. `None` means the caller could not ask at all.
 pub fn discover_for(
     repository: &Path,
     architecture: &ArchitecturePlan,
     plan_id: VerificationPlanId,
+    reach: Option<&workflow_code_intel::graph::Reach>,
 ) -> Result<VerificationPlan, VerificationPlanError> {
     let mut gates = Vec::new();
     let mut invocations = BTreeSet::new();
@@ -155,12 +159,19 @@ pub fn discover_for(
         timeout_seconds: 120,
     });
 
-    let scopes: Vec<_> = architecture
+    let mut scopes: Vec<_> = architecture
         .tasks
         .iter()
         .flat_map(|task| task.write_scopes.iter())
-        .map(|scope| scope.to_ascii_lowercase().replace('\\', "/"))
+        .map(|scope| normalize_scope(scope))
         .collect();
+    // What the change reaches is judged by the same layer rules as what it touches. A
+    // configuration loader consumed by an interface file earns the interface gates without anyone
+    // having edited one: the layer that breaks is not always the layer that changed.
+    if let Some(reach) = reach {
+        scopes.extend(reach.paths.iter().map(|path| normalize_scope(path)));
+        gates.extend(reach_gates(reach));
+    }
     if scopes.iter().any(|scope| database_scope(scope))
         && !gates.iter().any(|gate| gate.kind == EvidenceKind::Database)
     {
@@ -502,6 +513,50 @@ fn classify(command: &str) -> (String, EvidenceKind) {
         (format!("test:{command}"), EvidenceKind::Test)
     } else {
         (format!("command:{command}"), EvidenceKind::Command)
+    }
+}
+
+/// Plans are written by hand on either platform, and the graph stores forward slashes.
+fn normalize_scope(scope: &str) -> String {
+    scope.to_ascii_lowercase().replace('\\', "/")
+}
+
+/// What the reach could not answer, recorded for the reviewers rather than failing the candidate.
+///
+/// Neither gate is mandatory, and that is a decision about this port rather than a softening.
+/// Code intelligence is bound to delivery here, so a first workflow reaches verification before its
+/// project has ever been indexed; refusing there would block every first cycle over an absence the
+/// delivery gate already catches. "I cannot tell what is affected" and "nothing is affected" stay
+/// different claims, and only the first is reported.
+fn reach_gates(reach: &workflow_code_intel::graph::Reach) -> Vec<VerificationGate> {
+    let mut gates = Vec::new();
+    if let Some(reason) = &reach.reason {
+        gates.push(advisory("impact:unresolved", reason));
+    }
+    if reach.truncated {
+        let hubs = reach
+            .hubs
+            .iter()
+            .map(|hub| format!("{} ({} consumers) in {}", hub.name, hub.consumers, hub.path))
+            .collect::<Vec<_>>()
+            .join(", ");
+        gates.push(advisory(
+            "impact:high-fan-in",
+            &format!(
+                "The authorized write scopes reach more of this project than can be expanded into \
+                 gates, so reviewers should read this as a change to shared foundations rather \
+                 than as several hundred separate proofs. Most consumed: {hubs}"
+            ),
+        ));
+    }
+    gates
+}
+
+/// A gate that records something the reviewers must see without failing the candidate over it.
+fn advisory(name: &str, reason: &str) -> VerificationGate {
+    VerificationGate {
+        mandatory: false,
+        ..unavailable(name, EvidenceKind::Inspection, reason)
     }
 }
 

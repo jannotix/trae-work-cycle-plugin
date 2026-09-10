@@ -12,7 +12,7 @@ use crate::{
 };
 
 pub struct GraphStore {
-    connection: Connection,
+    pub(super) connection: Connection,
 }
 
 pub struct PartitionBatch<'connection> {

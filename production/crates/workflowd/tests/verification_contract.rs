@@ -250,3 +250,102 @@ fn dependency_and_packaging_changes_block_without_required_project_adapters() {
     assert!(unavailable.contains(&"security:dependency-license"));
     assert!(unavailable.contains(&"package:production-artifact"));
 }
+
+/// The layer that breaks is not always the layer that changed. A plan authorized to touch only a
+/// configuration file earns the interface gates when the graph says an interface file consumes it,
+/// and earns nothing when the graph was never asked.
+#[test]
+fn what_a_change_reaches_earns_the_gates_of_the_layer_it_reaches() {
+    use std::collections::BTreeSet;
+    use workflow_code_intel::graph::{Reach, ReachConfidence};
+
+    let directory = tempfile::tempdir().unwrap();
+    let plan = architecture(
+        vec!["src/config.rs".to_owned()],
+        vec!["cargo test --all-features".to_owned()],
+    );
+    let interface_gates = |plan: &VerificationPlan| {
+        plan.gates
+            .iter()
+            .filter(|gate| {
+                gate.name.starts_with("browser:") || gate.name.starts_with("accessibility:")
+            })
+            .count()
+    };
+
+    // Without a reach, a configuration-only scope is a configuration-only change.
+    let unreached = discover(directory.path(), &plan).unwrap();
+    assert_eq!(
+        interface_gates(&unreached),
+        0,
+        "nothing in the plan touches an interface"
+    );
+
+    let reached = workflowd::verification::discover_for(
+        directory.path(),
+        &plan,
+        workflow_core::VerificationPlanId::new(),
+        Some(&Reach {
+            confidence: ReachConfidence::Resolved,
+            hubs: Vec::new(),
+            paths: BTreeSet::from(["src/ui/page.tsx".to_owned()]),
+            reason: None,
+            truncated: false,
+        }),
+    )
+    .unwrap();
+    assert_eq!(
+        interface_gates(&reached),
+        2,
+        "the reached interface file requires the browser flow and the accessibility check"
+    );
+    assert!(
+        !reached
+            .gates
+            .iter()
+            .any(|gate| gate.name == "impact:unresolved"),
+        "a resolved reach records no uncertainty"
+    );
+}
+
+/// "I cannot tell what is affected" and "nothing is affected" are different claims. Only the first
+/// is recorded, and it does not fail the candidate: code intelligence is bound to delivery here, so
+/// a first workflow verifies before its project has ever been indexed.
+#[test]
+fn an_unresolved_reach_is_recorded_without_failing_the_candidate() {
+    use std::collections::BTreeSet;
+    use workflow_code_intel::graph::{Reach, ReachConfidence};
+
+    let directory = tempfile::tempdir().unwrap();
+    let plan = architecture(
+        vec!["src/config.rs".to_owned()],
+        vec!["cargo test --all-features".to_owned()],
+    );
+    let discovered = workflowd::verification::discover_for(
+        directory.path(),
+        &plan,
+        workflow_core::VerificationPlanId::new(),
+        Some(&Reach {
+            confidence: ReachConfidence::Unresolved,
+            hubs: Vec::new(),
+            paths: BTreeSet::new(),
+            reason: Some("this project has never been indexed. Run cycle_index.".to_owned()),
+            truncated: false,
+        }),
+    )
+    .unwrap();
+
+    let recorded = discovered
+        .gates
+        .iter()
+        .find(|gate| gate.name == "impact:unresolved")
+        .expect("the uncertainty is recorded");
+    assert!(
+        !recorded.mandatory,
+        "an absent index must not fail every first cycle"
+    );
+    assert!(
+        recorded.precondition.contains("cycle_index"),
+        "the record names what would resolve it"
+    );
+}
