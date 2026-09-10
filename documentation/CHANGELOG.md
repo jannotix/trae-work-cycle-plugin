@@ -16,6 +16,12 @@
 - Loopback role endpoints may omit authentication without receiving a synthetic bearer token; every non-loopback endpoint still requires an environment-variable or file key source.
 - Windows and WSL certification wait for the daemon to publish both its IPC credential and matching PID before sending parallel workflow requests.
 
+### Fixed
+
+- An arbiter approval the control plane could not honour was refused with an error before anything was written: no arbitration row, no history event, and a workflow left sitting in arbitration. The next dispatch then produced the same verdict from the same inputs, so a run in which either independent reviewer rejected while the arbiter approved could not converge — and the chain the product exists to keep said nothing about why. The verdict is now recorded verbatim, named `arbitration_refused` in the audit trail with the reason and the repair target beside it, and routed to repair toward the target the rejecting reviewer asked for. One dispatch converges even when the arbiter is wrong. A failed mandatory gate under an approval is handled the same way, and always repairs toward execution.
+
+  Ported from the same defect in Cycle for Claude Code, which found it during its first governed cycle where the two reviewers split. Trae Work had never reached that state, because no full cycle with two blind reviews has yet completed through the host — which is exactly the row this would have blocked.
+
 ### Security
 
 - Worktree isolation is explicitly not described as an operating-system sandbox. Nonpreapproved project commands cannot execute without an exact user consent receipt.

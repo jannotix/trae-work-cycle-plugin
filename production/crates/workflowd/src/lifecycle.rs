@@ -1087,7 +1087,7 @@ fn submit_arbitration(
     let reviews = store
         .load_reviews(candidate_id)
         .map_err(|error| error.to_string())?;
-    let (functional_review_digest, security_review_digest, reviews_approved) = match state.mode() {
+    let (functional_review_digest, security_review_digest) = match state.mode() {
         Some(workflow_core::WorkflowMode::Full) => {
             if reviews.len() != 2
                 || reviews
@@ -1106,29 +1106,21 @@ fn submit_arbitration(
                     review.role == workflow_core::WorkflowRole::SecurityArchitectureReviewer
                 })
                 .ok_or_else(|| "security and architecture review is missing".to_owned())?;
-            (
-                Some(functional.digest()),
-                Some(security.digest()),
-                functional.decision == workflow_core::ReviewDecision::Approved
-                    && security.decision == workflow_core::ReviewDecision::Approved,
-            )
+            (Some(functional.digest()), Some(security.digest()))
         }
         Some(workflow_core::WorkflowMode::Quick) => {
             if !reviews.is_empty() {
                 return Err("quick workflows cannot include independent reviews".to_owned());
             }
-            (None, None, true)
+            (None, None)
         }
         None => return Err("workflow does not have a routing mode".to_owned()),
     };
-    if verdict.decision == workflow_core::ArbiterDecision::Approved
-        && (!reviews_approved
-            || evidence.iter().any(|(record, _, mandatory)| {
-                *mandatory && record.status != workflow_core::EvidenceStatus::Passed
-            }))
-    {
-        return Err("approval requirements have not passed".to_owned());
-    }
+    // An approval the control plane cannot honour is recorded and routed to repair, never thrown
+    // away. Refusing it with an error wrote no arbitration row and no history event and left the
+    // workflow sitting in arbitration, so the next dispatch produced the same verdict from the same
+    // inputs and the run could not converge -- with nothing in the chain to say why it had not.
+    let refusal = refusal_for(verdict, &reviews, &evidence);
     let timestamp = workflow_core::WorkflowTimestamp::now();
     let receipt = workflow_core::ArbitrationReceipt {
         arbiter_verdict_digest: verdict.digest(),
@@ -1145,8 +1137,21 @@ fn submit_arbitration(
     store
         .save_arbitration_once(workflow_id, candidate_id, verdict, &receipt, timestamp)
         .map_err(|error| error.to_string())?;
-    let next_state = match verdict.decision {
-        workflow_core::ArbiterDecision::Approved => store
+    let next_state = match (&refusal, verdict.decision) {
+        // A refused approval is routed exactly like a rejection, toward the target the rejecting
+        // reviewer asked for, so one dispatch converges even when the arbiter is wrong.
+        (Some(refusal), _) => {
+            crate::repair::route(
+                store,
+                workflow_id,
+                candidate_id,
+                repair_cause(refusal.target),
+                timestamp,
+            )
+            .map_err(|error| error.to_string())?
+            .state
+        }
+        (None, workflow_core::ArbiterDecision::Approved) => store
             .apply_workflow_command(
                 workflow_id,
                 &format!("{workflow_id}:{candidate_id}:approved"),
@@ -1158,20 +1163,16 @@ fn submit_arbitration(
             .map_err(|error| error.to_string())?
             .state
             .state(),
-        workflow_core::ArbiterDecision::Rejected => {
+        (None, workflow_core::ArbiterDecision::Rejected) => {
             crate::repair::route(
                 store,
                 workflow_id,
                 candidate_id,
-                match verdict.repair_target {
-                    Some(workflow_core::RepairTarget::Architecture) => {
-                        crate::repair::RepairCause::PlanDefect
-                    }
-                    Some(workflow_core::RepairTarget::Execution) => {
-                        crate::repair::RepairCause::ImplementationFinding
-                    }
-                    None => return Err("rejected verdict lacks a repair target".to_owned()),
-                },
+                repair_cause(
+                    verdict
+                        .repair_target
+                        .ok_or_else(|| "rejected verdict lacks a repair target".to_owned())?,
+                ),
                 timestamp,
             )
             .map_err(|error| error.to_string())?
@@ -1185,9 +1186,10 @@ fn submit_arbitration(
             actor_id: "workflowd".to_owned(),
             candidate_id: Some(candidate_id),
             data: workflow_ipc::audit::AuditData::Workflow {
-                action: match verdict.decision {
-                    workflow_core::ArbiterDecision::Approved => "arbitration_approved",
-                    workflow_core::ArbiterDecision::Rejected => "arbitration_rejected",
+                action: match (&refusal, verdict.decision) {
+                    (Some(_), _) => "arbitration_refused",
+                    (None, workflow_core::ArbiterDecision::Approved) => "arbitration_approved",
+                    (None, workflow_core::ArbiterDecision::Rejected) => "arbitration_rejected",
                 }
                 .to_owned(),
             },
@@ -1198,10 +1200,22 @@ fn submit_arbitration(
                 .iter()
                 .map(|file| file.path.clone())
                 .collect(),
-            metadata: std::collections::BTreeMap::from([(
-                "receipt_digest".to_owned(),
-                receipt.digest().to_string(),
-            )]),
+            metadata: {
+                let mut metadata = std::collections::BTreeMap::from([(
+                    "receipt_digest".to_owned(),
+                    receipt.digest().to_string(),
+                )]);
+                // The chain says why the approval was refused, so the repair that follows is told
+                // what the reviewer objected to instead of sent in to rediscover it.
+                if let Some(refusal) = &refusal {
+                    metadata.insert("refusal".to_owned(), refusal.reason.clone());
+                    metadata.insert(
+                        "repair_target".to_owned(),
+                        format!("{:?}", refusal.target).to_lowercase(),
+                    );
+                }
+                metadata
+            },
             model: None,
             project_key: project_key.to_owned(),
             role: Some(workflow_core::WorkflowRole::Arbiter),
@@ -1213,6 +1227,74 @@ fn submit_arbitration(
     )
     .map_err(|error| error.to_string())?;
     Ok((receipt, workflow_state(next_state)?))
+}
+
+/// Why the control plane could not honour an arbiter's approval, and where the repair belongs.
+struct ArbitrationRefusal {
+    reason: String,
+    target: workflow_core::RepairTarget,
+}
+
+const fn repair_cause(target: workflow_core::RepairTarget) -> crate::repair::RepairCause {
+    match target {
+        workflow_core::RepairTarget::Architecture => crate::repair::RepairCause::PlanDefect,
+        workflow_core::RepairTarget::Execution => crate::repair::RepairCause::ImplementationFinding,
+    }
+}
+
+/// An approval binds only when nothing live contradicts it: a rejection by either independent
+/// reviewer, or a mandatory gate that did not pass. Either way the arbiter is wrong about the
+/// record rather than about the request, so the verdict is kept, named and repaired -- not lost.
+fn refusal_for(
+    verdict: &workflow_core::ArbiterVerdict,
+    reviews: &[workflow_core::ReviewVerdict],
+    evidence: &[(workflow_core::EvidenceRecord, String, bool)],
+) -> Option<ArbitrationRefusal> {
+    if verdict.decision != workflow_core::ArbiterDecision::Approved {
+        return None;
+    }
+    let rejecting: Vec<&workflow_core::ReviewVerdict> = reviews
+        .iter()
+        .filter(|review| review.decision == workflow_core::ReviewDecision::Rejected)
+        .collect();
+    let failed: Vec<&str> = evidence
+        .iter()
+        .filter(|(record, _, mandatory)| {
+            *mandatory && record.status != workflow_core::EvidenceStatus::Passed
+        })
+        .map(|(record, _, _)| record.invocation.as_str())
+        .collect();
+    if rejecting.is_empty() && failed.is_empty() {
+        return None;
+    }
+    let mut reasons = Vec::new();
+    if !rejecting.is_empty() {
+        let roles: Vec<&str> = rejecting
+            .iter()
+            .filter_map(|review| review_role_name(review.role).ok())
+            .collect();
+        reasons.push(format!("{} rejected this candidate", roles.join(" and ")));
+    }
+    if !failed.is_empty() {
+        reasons.push(format!(
+            "{} mandatory gate(s) did not pass: {}",
+            failed.len(),
+            failed.join(", ")
+        ));
+    }
+    Some(ArbitrationRefusal {
+        reason: reasons.join("; "),
+        // A rejecting reviewer names where the repair belongs. A failed gate is always the
+        // implementation, so execution is the floor rather than a guess.
+        target: if rejecting
+            .iter()
+            .any(|review| review.repair_target == Some(workflow_core::RepairTarget::Architecture))
+        {
+            workflow_core::RepairTarget::Architecture
+        } else {
+            workflow_core::RepairTarget::Execution
+        },
+    })
 }
 
 fn submit_review(
@@ -2243,10 +2325,147 @@ impl RuntimePaths {
 
 #[cfg(test)]
 mod tests {
-    use workflow_core::WorkflowState;
+    use workflow_core::{
+        ArbiterDecision, ArbiterVerdict, ContentDigest, EvidenceId, EvidenceKind, EvidenceRecord,
+        EvidenceStatus, RepairTarget, ReviewDecision, ReviewVerdict, WorkflowRole, WorkflowState,
+        WorkflowTimestamp,
+    };
     use workflow_ipc::AdmissionOperation;
 
-    use super::admission_allowed;
+    use super::{admission_allowed, refusal_for};
+
+    fn approval() -> ArbiterVerdict {
+        ArbiterVerdict {
+            candidate_digest: ContentDigest::of(b"candidate"),
+            decision: ArbiterDecision::Approved,
+            findings: Vec::new(),
+            repair_target: None,
+            requirements: Vec::new(),
+        }
+    }
+
+    fn review(
+        role: WorkflowRole,
+        decision: ReviewDecision,
+        target: Option<RepairTarget>,
+    ) -> ReviewVerdict {
+        ReviewVerdict {
+            candidate_digest: ContentDigest::of(b"candidate"),
+            decision,
+            findings: Vec::new(),
+            repair_target: target,
+            requirements: Vec::new(),
+            role,
+        }
+    }
+
+    fn gate(status: EvidenceStatus, mandatory: bool) -> (EvidenceRecord, String, bool) {
+        let now = WorkflowTimestamp::now();
+        (
+            EvidenceRecord {
+                candidate_digest: ContentDigest::of(b"candidate"),
+                exit_code: Some(1),
+                finished_at: now,
+                id: EvidenceId::new(),
+                invocation: "cargo test".to_owned(),
+                kind: EvidenceKind::Test,
+                output_digest: ContentDigest::of(b"output"),
+                skip_reason: None,
+                started_at: now,
+                status,
+                tool: "cargo".to_owned(),
+                tool_version: "1.97.1".to_owned(),
+            },
+            String::new(),
+            mandatory,
+        )
+    }
+
+    #[test]
+    fn an_approval_nothing_contradicts_is_not_refused() {
+        assert!(
+            refusal_for(
+                &approval(),
+                &[
+                    review(
+                        WorkflowRole::FunctionalReviewer,
+                        ReviewDecision::Approved,
+                        None
+                    ),
+                    review(
+                        WorkflowRole::SecurityArchitectureReviewer,
+                        ReviewDecision::Approved,
+                        None
+                    ),
+                ],
+                &[gate(EvidenceStatus::Passed, true)],
+            )
+            .is_none()
+        );
+    }
+
+    #[test]
+    fn an_approval_over_a_rejection_is_refused_toward_the_target_the_reviewer_asked_for() {
+        let refusal = refusal_for(
+            &approval(),
+            &[
+                review(
+                    WorkflowRole::FunctionalReviewer,
+                    ReviewDecision::Approved,
+                    None,
+                ),
+                review(
+                    WorkflowRole::SecurityArchitectureReviewer,
+                    ReviewDecision::Rejected,
+                    Some(RepairTarget::Architecture),
+                ),
+            ],
+            &[gate(EvidenceStatus::Passed, true)],
+        )
+        .expect("an approval over a live rejection is refused");
+        assert_eq!(refusal.target, RepairTarget::Architecture);
+        assert!(
+            refusal.reason.contains("security_architecture_reviewer"),
+            "the refusal names who rejected: {}",
+            refusal.reason
+        );
+    }
+
+    #[test]
+    fn an_approval_over_a_failed_mandatory_gate_is_refused_toward_execution() {
+        let refusal = refusal_for(&approval(), &[], &[gate(EvidenceStatus::Failed, true)])
+            .expect("an approval over a failed mandatory gate is refused");
+        assert_eq!(refusal.target, RepairTarget::Execution);
+        assert!(
+            refusal.reason.contains("cargo test"),
+            "the refusal names the gate: {}",
+            refusal.reason
+        );
+    }
+
+    #[test]
+    fn a_failed_gate_that_is_not_mandatory_does_not_refuse_an_approval() {
+        assert!(refusal_for(&approval(), &[], &[gate(EvidenceStatus::Failed, false)]).is_none());
+    }
+
+    #[test]
+    fn a_rejection_is_never_a_refusal_because_it_already_routes_to_repair() {
+        let mut verdict = approval();
+        verdict.decision = ArbiterDecision::Rejected;
+        verdict.repair_target = Some(RepairTarget::Execution);
+        assert!(
+            refusal_for(
+                &verdict,
+                &[review(
+                    WorkflowRole::SecurityArchitectureReviewer,
+                    ReviewDecision::Rejected,
+                    Some(RepairTarget::Execution)
+                )],
+                &[gate(EvidenceStatus::Failed, true)],
+            )
+            .is_none()
+        );
+    }
 
     #[test]
     fn terminal_and_suspended_workflows_cannot_reenter_admission() {
