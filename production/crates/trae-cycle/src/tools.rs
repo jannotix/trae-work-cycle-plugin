@@ -1548,10 +1548,36 @@ fn string_list(args: &Value, key: &str) -> Vec<String> {
         .unwrap_or_default()
 }
 
+/// The confirmation gate carries the caller assertion that a human approved this exact
+/// command. That assertion is what the gate protects, and its JSON spelling is not a
+/// security property: a caller that sends the string "true" has asserted the same thing as
+/// one that sends the boolean. Refusing the string bought nothing and cost a great deal,
+/// because the refusal was worded as though the user had not approved. A model caller that
+/// stringifies the field reads "requires confirm: true after explicit user approval",
+/// concludes the approval it just obtained was not explicit enough, and asks again — a loop
+/// that outlives the single-use token it is trying to spend. So accept either spelling, and
+/// when refusing, say which of the three actual reasons applies.
 fn require_confirm(args: &Value) -> Result<(), String> {
-    match args.get("confirm").and_then(Value::as_bool) {
-        Some(true) => Ok(()),
-        _ => Err("this command requires confirm: true after explicit user approval".to_owned()),
+    let Some(confirm) = args.get("confirm") else {
+        return Err(
+            "this command requires confirm: true after explicit user approval".to_owned(),
+        );
+    };
+    match confirm {
+        Value::Bool(true) => Ok(()),
+        Value::Bool(false) => Err(
+            "this command requires confirm: true after explicit user approval; confirm was false"
+                .to_owned(),
+        ),
+        Value::String(text) if text.eq_ignore_ascii_case("true") => Ok(()),
+        Value::String(text) if text.eq_ignore_ascii_case("false") => Err(
+            "this command requires confirm: true after explicit user approval; confirm was false"
+                .to_owned(),
+        ),
+        other => Err(format!(
+            "confirm must be the boolean true, or the string \"true\"; received {other}. \
+             The user approval itself is not in question here: only this field is malformed"
+        )),
     }
 }
 
@@ -1564,7 +1590,7 @@ fn now_unix_millis() -> i64 {
 
 #[cfg(test)]
 mod tests {
-    use super::{ToolContext, call, descriptors};
+    use super::{ToolContext, call, descriptors, require_confirm};
     use crate::{daemon::Daemon, jobs::Jobs};
     use serde_json::json;
     use workflow_roles::{CONSULT_TIMEOUT, RolesClient, UsageLedger};
@@ -1640,6 +1666,39 @@ mod tests {
                 .unwrap_err();
             assert!(error.contains("confirm"));
         }
+    }
+
+    #[test]
+    fn a_stringified_confirmation_is_accepted_like_the_boolean() {
+        // A model caller that spells the boolean as a string has asserted the same approval.
+        for spelling in [json!("true"), json!("TRUE"), json!("True")] {
+            require_confirm(&json!({"confirm": spelling})).expect("string true is a confirmation");
+        }
+        require_confirm(&json!({"confirm": true})).expect("the boolean still works");
+    }
+
+    #[test]
+    fn a_refused_confirmation_says_which_of_the_three_reasons_applies() {
+        // Absent: the user has not been asked, and the message may say so.
+        let absent = require_confirm(&json!({})).unwrap_err();
+        assert!(absent.contains("explicit user approval"), "{absent}");
+        assert!(!absent.contains("malformed"), "{absent}");
+
+        // Declined: the caller asked and was told no. Not a malformed payload.
+        for spelling in [json!(false), json!("false")] {
+            let declined = require_confirm(&json!({"confirm": spelling})).unwrap_err();
+            assert!(declined.contains("confirm was false"), "{declined}");
+        }
+
+        // Malformed: the approval is not in question, only the field is. Saying otherwise
+        // sends the caller back to the user for an approval it already holds, and the
+        // single-use token expires while it asks.
+        let malformed = require_confirm(&json!({"confirm": 1})).unwrap_err();
+        assert!(malformed.contains("malformed"), "{malformed}");
+        assert!(
+            malformed.contains("not in question"),
+            "the message must not read as a missing approval: {malformed}"
+        );
     }
 
     #[tokio::test]
