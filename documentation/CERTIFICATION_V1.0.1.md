@@ -56,40 +56,41 @@ for a Trae Work UI row. Evidence from `1.0.0` is historical and is not inherited
 
 ## 3. Trae Work workflow certification
 
-> **Host-side blocker, 2026-09-12.** Every UI row below is held by one condition
-> that is not in this product. In a live Trae Solo session the agent enumerated
-> eight MCP servers and filtered out **all eight** with `hasTools=false,
-> status=starting` — the seven `trae-remote-official:` plugin servers as much as
-> `usrlocalmcp.trae-cycle-cert`. `status=running` never appears in the log, and the
-> enumeration ran seventy-five minutes after launch, so this is not a warm-up.
-> The agent session had no MCP tools of any kind.
+> **Resolved, 2026-09-13.** The condition that held every UI row below was
+> found and cleared, and it was not in this product. Two causes compounded.
 >
-> The plugin side was measured on the same machine and is healthy: the registered
-> command, arguments and timeouts are correct, and the installed binary completes
-> the full MCP handshake from cold in **249 ms**, exposing **37 tools**. No
-> `trae-cycle.exe mcp` process is ever spawned by the host, and no spawn error is
-> logged.
+> The bytes installed at the registered no-space path were the `1.0.0` build: the
+> runtime had been unpacked at the legacy space-bearing path, so the entry Trae
+> Work launched and the binary under certification were not the same file. The
+> head build was installed on 2026-09-12.
 >
-> The earlier diagnosis recorded against W2 — an intermittently clipped or
-> defocused prompt footer — is withdrawn. It described a symptom observed while
-> the agent had no tools at all, and attributing the block to the collector sent
-> the investigation the wrong way for ten days. One observation remains
-> outstanding to close this: run any task in a fresh session and confirm whether
-> any MCP server reaches `running`. If none does, W2–W7 are blocked on a Trae Solo
-> defect, no change to this plugin can unblock them, and the v1 scope decision
-> becomes whether to certify the CLI/MCP lane alone and declare the UI lane
-> uncertified.
+> The host then binds the tool catalogue of a task when that task is created. The
+> session log records the server loading at 14:32:53 with its complete catalogue
+> — `final result: 4 extensions: mcp.config.usrlocalmcp.trae-cycle-cert(tools=
+> [cycle_setup,cycle_doctor,cycle_start,…` — while the task created before it went
+> on answering that no `cycle_*` tool was present. In a task created after the
+> install, `/cycle setup` returned a live control-plane report on the first
+> attempt.
+>
+> Both earlier diagnoses are withdrawn. The clipped prompt footer described a
+> symptom seen while the session held no tools at all. The reading that the host
+> MCP subsystem never reaches a working state was refuted by the same log that
+> suggested it: four servers were filtered out as `stopped`, and Cycle was not
+> among them. Neither cost a line of product code, and both sent the
+> investigation the wrong way — the first for ten days.
+>
+> W2–W7 are executable. None has been run.
 
 | ID | Check | Automated control plane | Trae Work 0.1.61 UI | Evidence or blocking condition |
 | --- | --- | --- | --- | --- |
-| W1 | `/cycle setup` and `/cycle doctor` report the configured loopback roles healthy | PASS | NOT REPRODUCIBLE | Recorded `PASS` on 2026-09-02: the live `/cycle setup` reported product `1.0.1`, protocol v1/schema v18, writable `TraeCycleCert` data, Git `2.55.0.windows.5` and all five loopback roles, and `/cycle doctor` followed with a valid ledger and ReadWrite store. **On 2026-09-12 the same command on the same host could not run at all**, because no `cycle_*` tool was present in the session; the result is therefore not reproducible on the current host state and the UI column is withdrawn pending the MCP condition above. The control-plane column stands: the identical report was obtained over stdio from the head build in 249 ms |
+| W1 | `/cycle setup` and `/cycle doctor` report the configured loopback roles healthy | PASS | PASS | Re-executed on the live host on 2026-09-13 at 14:40, in a task created after the head build was installed: the reply named control plane `TraeCycleCert 1.0.1`, protocol 1, schema `read_write` v18 writable, Git `2.55.0.windows.5`, and all five roles configured — executor on the current Trae Work model, arbiter, architect, functional_reviewer and security_reviewer on the certification loopback — and stated the project was ready for a cycle. This supersedes the withdrawn 2026-09-02 row, whose result the 2026-09-12 attempt had contradicted. `/cycle doctor` through the interface is not yet re-executed on this revision |
 | W1a | The session refuses to fake governed work when the control plane is unreachable | N/A | PASS | Twice on 2026-09-12, with no `cycle_*` tool present, the session named the missing tools, quoted the skill's rule that "a claim is valid only when it is backed by a tool result", declined to report `cycle_setup` as run, stated what would fix it, and offered the ungoverned alternative explicitly rather than performing it silently. This is ground rule 10, added in `cdceadd…`, observed on the live host — and the only Trae Work UI evidence this release has collected |
-| W2 | Quick workflow traverses Skill → Command → MCP → role → verification → arbitration → promotion | PASS | BLOCKED | `quick_cycle_delivers_tested_software_end_to_end` passes Windows and WSL. On the live host, `/cycle run quick` entered the native argument collector and accepted the isolated `trae-ui-fixture` project key. No quick completion is claimed. The block is the host-side MCP condition described above, not the argument collector: with no `cycle_*` tool present, the workflow cannot start whatever the collector does |
-| W3 | Full workflow performs two blind reviews, rejection, repair, re-review, and approval | PASS | BLOCKED | `full_cycle_requires_two_blind_reviews_and_repairs_once` passes Windows and WSL; UI run pending |
+| W2 | Quick workflow traverses Skill → Command → MCP → role → verification → arbitration → promotion | PASS | PENDING | `quick_cycle_delivers_tested_software_end_to_end` passes Windows and WSL. Through the interface, the control plane is now reachable and reports itself ready for a cycle on the isolated `trae-ui-fixture` project key; no quick completion is claimed, because none has been attempted since the host condition cleared |
+| W3 | Full workflow performs two blind reviews, rejection, repair, re-review, and approval | PASS | PENDING | `full_cycle_requires_two_blind_reviews_and_repairs_once` passes Windows and WSL; UI run pending |
 | W4 | Two projects remain isolated under concurrent workflows | PASS | PENDING | Automated Windows/WSL test passed; UI isolation observation not yet recorded |
-| W5 | Restart during a workflow resumes from durable state | PASS | BLOCKED | Daemon lifecycle/restart tests pass; close/reopen Trae Work and `/cycle:resume` pending |
+| W5 | Restart during a workflow resumes from durable state | PASS | PENDING | Daemon lifecycle/restart tests pass; close/reopen Trae Work and `/cycle:resume` pending |
 | W6 | Trae Work update preserves MCP, Skill, Command, and durable state | N/A | PARTIAL | A real 0.1.54 → 0.1.61 update preserved the task, Command, MCP registration and data directory; the current Skill was then updated from the verified 1.0.1 ZIP. Restart/reload and workflow-resume capture remain pending |
-| W7 | Exact verification command is displayed and runs only after user grants its single-use consent token | PASS | BLOCKED | Automated negative/positive path passes; manual prompt/approval/second-verify path pending |
+| W7 | Exact verification command is displayed and runs only after user grants its single-use consent token | PASS | PENDING | Automated negative/positive path passes; manual prompt/approval/second-verify path pending |
 
 ## 4. Performance and release artifacts
 
@@ -104,13 +105,13 @@ for a Trae Work UI row. Evidence from `1.0.0` is historical and is not inherited
 
 ## 5. Final gate order
 
-0. Settle the host-side MCP condition. Run any task in a fresh Trae Solo session
-   and record whether any MCP server reaches `running`. If none does, W2–W7 are
-   blocked on the host, no plugin change moves them, and the scope decision for
-   v1 is whether to certify the CLI/MCP lane alone with the UI lane declared
-   uncertified. Everything below assumes this resolves in the plugin's favour.
-1. Re-establish a UI control path and complete rows W2–W7 with the head Skill and
-   binary, on the revision this matrix names.
+0. Settled on 2026-09-13: the host condition was a stale installed binary and a
+   tool catalogue bound at task creation, not a defect in the host or in this
+   product. See the note in section 3.
+1. Complete rows W2–W7 with the head Skill and binary, on the revision this
+   matrix names. Every UI row must run in a task created after those bytes were
+   installed, and must record that creation time: a task created earlier carries
+   the tool catalogue of an earlier install and cannot testify about this one.
 2. Complete restart, update/reinstall, uninstall, and clean reinstall on Windows;
    complete the equivalent native CLI/MCP lifecycle on WSL.
 3. Either supply a production code-signing identity as protected environment

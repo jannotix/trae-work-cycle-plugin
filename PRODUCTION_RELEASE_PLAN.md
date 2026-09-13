@@ -196,10 +196,42 @@ the product license, third-party notices, README, and its platform executable.
 | T02 | Implemented — `67890d4` plus keyless-loopback correction `85d6afa`; policy, expiring single-use ledgered consent, runner boundary and MCP quick/full/repair/concurrency certification passed on Windows and WSL |
 | T03 | Implemented — `a9a8726` plus release/signing follow-ups; exact CI run 33286348988 passed Windows 2025, Ubuntu 24.04, RustSec, license and package contracts on `d5aa25b…`; tagless release-candidate workflow still requires default-branch integration and signing secrets |
 | T04 | Passed on `123d481`: raw receipt `passed: true`, total 1,259,776 ms, 898.1 MiB peak, 0 parse errors; final sealed-SHA rerun remains mandatory |
-| T05 | Blocked on the host — Trae Work Desktop 0.1.61 is pinned after a real in-place update from 0.1.54, which preserved the task, Command, MCP registration and data directory. The 2026-09-02 `/cycle setup` and `/cycle doctor` passes are **not reproducible**: on 2026-09-12 the same commands could not run, because the agent session held no `cycle_*` tool. The prompt-footer diagnosis previously recorded here is withdrawn — Trae Solo filtered out all eight registered MCP servers with `status=starting`, its own official plugins included, while the head binary completed the MCP handshake from cold in 249 ms with 37 tools. See the host-side blocker note in `documentation/CERTIFICATION_V1.0.1.md` §3; one observation remains to settle whether any MCP server ever reaches `running` on this host |
+| T05 | Unblocked, execution pending — Trae Work Desktop 0.1.61 is pinned after a real in-place update from 0.1.54, which preserved the task, Command, MCP registration and data directory. The ten-day UI block had two causes, both now identified and neither in the logic of this product. First, the registered MCP entry pointed at the no-space path while the bytes actually installed there were the 1.0.0 build left at the legacy space-bearing path; the head build was installed on 2026-09-12. Second, the host binds the tool catalogue of a task when that task is created, so the pre-existing task kept reporting no `cycle_*` tool even after the host had loaded the server with its full catalogue. In a task created afterwards, `/cycle setup` returned a live control-plane report on the first attempt (2026-09-13). W2-W7 are therefore executable; the two earlier diagnoses recorded against them, a clipped prompt footer and a broken host MCP subsystem, are both withdrawn |
 | T06 | Implemented — policies, license-bearing archives, private vulnerability reporting, signing script and approval environments complete. Authenticode is now conditional on configured secrets, and every public surface discloses the unsigned runtime; a production signing identity remains desirable but no longer gates publication |
 | T07 | Prepared — manifest, permissions/data flow, install recipe, logo and checklist complete; external marketplace submission awaits final public assets and action-time owner confirmation |
 | T08–T09 | Blocked — final UI receipts, final-SHA 500k rerun, sealed release candidate, publication approval and public verification remain mandatory |
+
+## Host constraints and how this plan adapts to them
+
+Trae Work is not Claude Code, and a gate this port cannot execute the way its
+reference does is adapted rather than dropped or quietly marked done. What the
+philosophy requires is preserved in every case: a claim is made only where a
+tool result backs it, evidence names the exact revision and host that produced
+it, and what was not observed is recorded as not observed.
+
+| Host constraint | Measured on | Adaptation, and what it preserves |
+| --- | --- | --- |
+| The tool catalogue of a task is bound when the task is created. A task created before a server loads keeps reporting no tools for its whole life, whatever the host has loaded since | 2026-09-13: the log records the server loading with its full catalogue at 14:32:53, while the task created before it still answered that no `cycle_*` tool was present; a task created afterwards reached the control plane on the first attempt | Every UI row must be executed in a task created after the binary, MCP registration and Skill under test were installed, and the row records that creation time. This is stricter than the reference, not weaker: it closes a path by which a stale session could produce evidence about bytes it never loaded |
+| A host update cannot be summoned on demand, so W6 is observable only when the vendor ships one | The 0.1.54 to 0.1.61 update on 2026-09-02 | W6 stays an opportunistic gate. What was observed at that update is recorded as fact; the rest is recorded as pending the next update, and the release is not held on the schedule of a third party. The disclosure obligation is unchanged: the matrix must say which half was observed |
+| No code-signing identity exists, and the CA/Browser Forum has required hardware-held keys since June 2023 | The conditional signing step in the release workflow | Signing is enforced whenever an identity is configured and never simulated when one is not. Publishing unsigned does not block; publishing unsigned without saying so on every public surface does. Already implemented |
+| Cycle cannot read Trae Work provider credentials, so the four read-only roles cannot be certified against whatever model the host itself uses | Product boundary, by design | The real-provider gate runs against an endpoint the operator configures in `roles.json`, and the receipt records the endpoint class rather than the key. Certifying the roles against the provider of the host is not adapted but refused: it would require reading a credential this product promises never to touch |
+| Marketplace acceptance is the decision of a third party | T07 | The bundle, recipe and disclosures are prepared and verifiable locally; submission stays an owner action at action time. A GitHub Release is never recorded as marketplace acceptance |
+
+## Open work not yet in the ledger above
+
+These came out of the adversarial comparison against Cycle for Claude Code and
+have been tracked only in conversation until now, which is the same
+record-keeping failure the certification matrix was just repaired for.
+
+| ID | Work | Why it is open |
+| --- | --- | --- |
+| R1 | Execute W2-W7 in a task created after the head install | The host condition that blocked them is understood and cleared; nothing has been run yet |
+| R2 | Complete I6: uninstall, clean reinstall, and the equivalent WSL lifecycle | Never executed on any revision |
+| R3 | One full cycle against a real configured provider rather than the loopback endpoint | Every role result on record comes from the certification loopback |
+| R4 | Observe the consent prompt, approval and second verification in the interface | Only the automated negative and positive paths are on record (W7) |
+| R5 | Confirm write-scope enforcement refuses an out-of-scope write on the live host | Proven in tests; never observed through the host |
+| R6 | Audit the delivery path for panics reachable from operator input | `panic = abort` in release means a reachable panic is a lost workflow, not an error |
+| R7 | Rerun the 500k benchmark on the sealed revision | The passing receipt names a revision that is now far behind |
 
 ## Defects ported from Cycle for Claude Code (2026-09-10)
 
