@@ -7,14 +7,24 @@ only when its named environment and boundary were exercised on the recorded
 revision or exact artifact. Automated control-plane evidence never substitutes
 for a Trae Work UI row. Evidence from `1.0.0` is historical and is not inherited.
 
+> **Evidence invalidated by source change (2026-09-13).** Twenty-one commits
+> landed between `d5aa25b…`, the revision most rows below were exercised on, and
+> `c538c7e…`, the current head. Seven of them changed control-plane behaviour:
+> arbitration recording and repair routing, the arbiter's review payload, candidate
+> retention, reach-driven gate discovery, and the skill's ground rules. By this
+> matrix's own rule, every row whose evidence names an earlier revision no longer
+> covers the shipped code and must be re-executed before any seal. The rows are
+> left at their recorded results rather than blanked, because what was proven then
+> is still a fact about then — but none of it is a fact about `c538c7e…`.
+
 ## Candidate identity
 
 | Field | Current value |
 | --- | --- |
-| Branch | `release/v1.0.1-production` |
-| Current local candidate revision | Resolve from the commit containing this matrix; any later source change invalidates prior evidence |
-| Latest local runtime and WSL evidence | `b9b48a2441692c67d5e7032292db6d076ee85b38`; a final seal must rerun after this documentation update |
-| Latest remotely verified revision | `d5aa25bc95dee068f2e6891bf6d8342aacb6862c` |
+| Branch | `main` and `release/v1.0.1-production`, identical at `c538c7e…` since the 2026-09-10 merge |
+| Current local candidate revision | `c538c7e9d8949647c57d27d1809d080c572c3e48`; any later source change invalidates prior evidence |
+| Latest local runtime and WSL evidence | `b9b48a2441692c67d5e7032292db6d076ee85b38` — **stale**, 21 commits behind the head |
+| Latest remotely verified revision | `c538c7e9d8949647c57d27d1809d080c572c3e48` ([CI green on Windows 2025, Ubuntu 24.04, RustSec and the license gate](https://github.com/jannotix/trae-work-cycle-plugin/actions)); the rows below still cite `d5aa25b…` and have not been re-executed |
 | Trae Work Windows host | `0.1.61` (real in-place update from `0.1.54` on 2026-09-02) |
 | Windows runner | Windows 11 local; GitHub `windows-2025` |
 | WSL runner | WSL2 Ubuntu 24.04 x64, ext4 clone; GitHub `ubuntu-24.04` |
@@ -37,7 +47,7 @@ for a Trae Work UI row. Evidence from `1.0.0` is historical and is not inherited
 
 | ID | Check | Windows / Trae Work | WSL | Evidence or blocking condition |
 | --- | --- | --- | --- | --- |
-| I1 | Executable installs at a path without spaces | PARTIAL | PARTIAL | Windows `1.0.1` binary installed at `%LOCALAPPDATA%\TraeCycle\bin\trae-cycle.exe`, SHA-256 `343b19d6fdc1ebe55e5589ce0051477fb86aaa6d92a72a0084ddfcc6f1011ee0`; WSL candidate archive SHA-256 `7ee8fccd703186c8785e1483384f337fe4998b321171becb17965bd1777330c5`; final signed/exact-SHA pair pending |
+| I1 | Executable installs at a path without spaces | PARTIAL | PARTIAL | Windows binary installed at `%LOCALAPPDATA%\TraeCycle\bin\trae-cycle.exe`. On 2026-09-11 the installed bytes were found to be the `1.0.0` build at the legacy space-bearing path, not the hash this row previously recorded; the current head build SHA-256 `66e84eaf6515cdfc8ee95c08730552da80faab19be84f37778973550261f63be` (from `c538c7e…`) was installed at the no-space path and the legacy install left in place. WSL candidate archive SHA-256 `7ee8fccd703186c8785e1483384f337fe4998b321171becb17965bd1777330c5` is equally stale; final exact-SHA pair pending |
 | I2 | Extracted runtime archive contains binary, README, license, notice, and complete third-party notices | PARTIAL | PARTIAL | Windows candidate built at `05daf813…`, SHA-256 `4feb59a5cb74e426268282870ca454b23cc36fb7a7d41260c1c637887caea97b`, passed extraction and MCP smoke; it is deliberately unsigned. The earlier WSL candidate archive also passed extraction and MCP smoke. Final signed Windows and exact-SHA WSL archives remain pending |
 | I3 | Skill ZIP has root-level `SKILL.md`, `LICENSE`, and `NOTICE` and Trae Work accepts it | PARTIAL | N/A | `1.0.1` ZIP SHA-256 `86231a2208013ab6147ee26e3cd20df1a1f629fd03733e030639a5a952796ec8` passes package contract; the active supported local Skill installation now has source `SKILL.md` SHA-256 `a44b45131cc2d57916028080271bad73f8a17b7d7ea433acab247af2a56a5658`; exact Marketplace-upload revalidation remains pending |
 | I4 | `cycle` Command is created from the shipped definition | PARTIAL | N/A | The existing Command invoked an explicit `cycle_setup` MCP tool call after the host update; command-definition and final-Skill session revalidation remain pending |
@@ -46,10 +56,35 @@ for a Trae Work UI row. Evidence from `1.0.0` is historical and is not inherited
 
 ## 3. Trae Work workflow certification
 
+> **Host-side blocker, 2026-09-12.** Every UI row below is held by one condition
+> that is not in this product. In a live Trae Solo session the agent enumerated
+> eight MCP servers and filtered out **all eight** with `hasTools=false,
+> status=starting` — the seven `trae-remote-official:` plugin servers as much as
+> `usrlocalmcp.trae-cycle-cert`. `status=running` never appears in the log, and the
+> enumeration ran seventy-five minutes after launch, so this is not a warm-up.
+> The agent session had no MCP tools of any kind.
+>
+> The plugin side was measured on the same machine and is healthy: the registered
+> command, arguments and timeouts are correct, and the installed binary completes
+> the full MCP handshake from cold in **249 ms**, exposing **37 tools**. No
+> `trae-cycle.exe mcp` process is ever spawned by the host, and no spawn error is
+> logged.
+>
+> The earlier diagnosis recorded against W2 — an intermittently clipped or
+> defocused prompt footer — is withdrawn. It described a symptom observed while
+> the agent had no tools at all, and attributing the block to the collector sent
+> the investigation the wrong way for ten days. One observation remains
+> outstanding to close this: run any task in a fresh session and confirm whether
+> any MCP server reaches `running`. If none does, W2–W7 are blocked on a Trae Solo
+> defect, no change to this plugin can unblock them, and the v1 scope decision
+> becomes whether to certify the CLI/MCP lane alone and declare the UI lane
+> uncertified.
+
 | ID | Check | Automated control plane | Trae Work 0.1.61 UI | Evidence or blocking condition |
 | --- | --- | --- | --- | --- |
-| W1 | `/cycle setup` and `/cycle doctor` report the configured loopback roles healthy | PASS | PASS | On Trae Work `0.1.61`, the live `/cycle setup` result reported product `1.0.1`, protocol v1/schema v18, writable `TraeCycleCert` data, Git `2.55.0.windows.5`, and all five roles via `127.0.0.1:18765`. The subsequent live `/cycle doctor` result was `PASS` with a valid ledger, matching schema, ReadWrite store, and the same five loopback roles |
-| W2 | Quick workflow traverses Skill → Command → MCP → role → verification → arbitration → promotion | PASS | BLOCKED | `quick_cycle_delivers_tested_software_end_to_end` passes Windows and WSL. On the live host, `/cycle run quick` entered the native argument collector, accepted the isolated `trae-ui-fixture` project key, and proceeded to the original-request/indexing prompts. The Trae Work `0.1.61` prompt footer is intermittently clipped or loses UI focus before the workflow can start; no quick completion is claimed |
+| W1 | `/cycle setup` and `/cycle doctor` report the configured loopback roles healthy | PASS | NOT REPRODUCIBLE | Recorded `PASS` on 2026-09-02: the live `/cycle setup` reported product `1.0.1`, protocol v1/schema v18, writable `TraeCycleCert` data, Git `2.55.0.windows.5` and all five loopback roles, and `/cycle doctor` followed with a valid ledger and ReadWrite store. **On 2026-09-12 the same command on the same host could not run at all**, because no `cycle_*` tool was present in the session; the result is therefore not reproducible on the current host state and the UI column is withdrawn pending the MCP condition above. The control-plane column stands: the identical report was obtained over stdio from the head build in 249 ms |
+| W1a | The session refuses to fake governed work when the control plane is unreachable | N/A | PASS | Twice on 2026-09-12, with no `cycle_*` tool present, the session named the missing tools, quoted the skill's rule that "a claim is valid only when it is backed by a tool result", declined to report `cycle_setup` as run, stated what would fix it, and offered the ungoverned alternative explicitly rather than performing it silently. This is ground rule 10, added in `cdceadd…`, observed on the live host — and the only Trae Work UI evidence this release has collected |
+| W2 | Quick workflow traverses Skill → Command → MCP → role → verification → arbitration → promotion | PASS | BLOCKED | `quick_cycle_delivers_tested_software_end_to_end` passes Windows and WSL. On the live host, `/cycle run quick` entered the native argument collector and accepted the isolated `trae-ui-fixture` project key. No quick completion is claimed. The block is the host-side MCP condition described above, not the argument collector: with no `cycle_*` tool present, the workflow cannot start whatever the collector does |
 | W3 | Full workflow performs two blind reviews, rejection, repair, re-review, and approval | PASS | BLOCKED | `full_cycle_requires_two_blind_reviews_and_repairs_once` passes Windows and WSL; UI run pending |
 | W4 | Two projects remain isolated under concurrent workflows | PASS | PENDING | Automated Windows/WSL test passed; UI isolation observation not yet recorded |
 | W5 | Restart during a workflow resumes from durable state | PASS | BLOCKED | Daemon lifecycle/restart tests pass; close/reopen Trae Work and `/cycle:resume` pending |
@@ -69,9 +104,13 @@ for a Trae Work UI row. Evidence from `1.0.0` is historical and is not inherited
 
 ## 5. Final gate order
 
-1. Re-establish a stable Trae Work 0.1.61 UI control path at the native quick
-   workflow collector, then complete rows W2–W7 with the `1.0.1` Skill and
-   binary.
+0. Settle the host-side MCP condition. Run any task in a fresh Trae Solo session
+   and record whether any MCP server reaches `running`. If none does, W2–W7 are
+   blocked on the host, no plugin change moves them, and the scope decision for
+   v1 is whether to certify the CLI/MCP lane alone with the UI lane declared
+   uncertified. Everything below assumes this resolves in the plugin's favour.
+1. Re-establish a UI control path and complete rows W2–W7 with the head Skill and
+   binary, on the revision this matrix names.
 2. Complete restart, update/reinstall, uninstall, and clean reinstall on Windows;
    complete the equivalent native CLI/MCP lifecycle on WSL.
 3. Either supply a production code-signing identity as protected environment

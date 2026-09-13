@@ -196,10 +196,33 @@ the product license, third-party notices, README, and its platform executable.
 | T02 | Implemented — `67890d4` plus keyless-loopback correction `85d6afa`; policy, expiring single-use ledgered consent, runner boundary and MCP quick/full/repair/concurrency certification passed on Windows and WSL |
 | T03 | Implemented — `a9a8726` plus release/signing follow-ups; exact CI run 33286348988 passed Windows 2025, Ubuntu 24.04, RustSec, license and package contracts on `d5aa25b…`; tagless release-candidate workflow still requires default-branch integration and signing secrets |
 | T04 | Passed on `123d481`: raw receipt `passed: true`, total 1,259,776 ms, 898.1 MiB peak, 0 parse errors; final sealed-SHA rerun remains mandatory |
-| T05 | In progress — Trae Work Desktop 0.1.61 is pinned after a real in-place update from 0.1.54. The update preserved the task, Command, MCP registration and data directory; live `/cycle setup` and `/cycle doctor` now pass with all five loopback roles. The active Skill is updated to 1.0.1 with a verified rollback copy. The native quick workflow collector accepts the isolated project key, but its original-request/indexing footer is intermittently clipped or loses UI focus before a workflow starts; quick/full/restart/uninstall remain incomplete |
+| T05 | Blocked on the host — Trae Work Desktop 0.1.61 is pinned after a real in-place update from 0.1.54, which preserved the task, Command, MCP registration and data directory. The 2026-09-02 `/cycle setup` and `/cycle doctor` passes are **not reproducible**: on 2026-09-12 the same commands could not run, because the agent session held no `cycle_*` tool. The prompt-footer diagnosis previously recorded here is withdrawn — Trae Solo filtered out all eight registered MCP servers with `status=starting`, its own official plugins included, while the head binary completed the MCP handshake from cold in 249 ms with 37 tools. See the host-side blocker note in `documentation/CERTIFICATION_V1.0.1.md` §3; one observation remains to settle whether any MCP server ever reaches `running` on this host |
 | T06 | Implemented — policies, license-bearing archives, private vulnerability reporting, signing script and approval environments complete. Authenticode is now conditional on configured secrets, and every public surface discloses the unsigned runtime; a production signing identity remains desirable but no longer gates publication |
 | T07 | Prepared — manifest, permissions/data flow, install recipe, logo and checklist complete; external marketplace submission awaits final public assets and action-time owner confirmation |
-| T08–T09 | Blocked — final UI/signing receipts, final-SHA 500k rerun, sealed release candidate, publication approval and public verification remain mandatory |
+| T08–T09 | Blocked — final UI receipts, final-SHA 500k rerun, sealed release candidate, publication approval and public verification remain mandatory |
+
+## Defects ported from Cycle for Claude Code (2026-09-10)
+
+Cycle for Claude Code found these by running governed cycles, not by reading
+code. Each was then checked against this port and fixed where it applied. All
+five landed on `main`, each with CI green on Windows 2025 and Ubuntu 24.04.
+
+| ID | Change | Commit |
+| --- | --- | --- |
+| I1 | A refused arbitration is recorded and routed to repair instead of thrown away. An approval contradicting a live reviewer rejection left no arbitration row, no history event and a workflow stuck in `arbitration`, so the next dispatch reproduced the same verdict forever | `beb95d7` |
+| I2 | The control plane hands the arbiter the recorded reviews rather than trusting the caller to include them, and refuses the consultation when it cannot. `cycle_role`/`arbiter_verdict` now requires `workflow_id` | `3c003b5` |
+| I3 | Candidate file bytes of completed and cancelled workflows can be released through `cycle_limits` `usage`/`prune`, keeping every row, digest, evidence record and ledger link | `4170718` |
+| I5 | Ground rule 10: the session stops when the control plane cannot be reached instead of doing the work by hand. Two of the three defects checked did not apply to this port — this one did, and it was **observed working on the live host** on 2026-09-12 | `cdceadd` |
+| I4 | Verification reads what a change reaches through the code graph, not only what it touches; `impact:unresolved` and `impact:high-fan-in` record what it cannot answer | `19a16d2` |
+
+Not ported, with reason: the delivery commit message that named zero gates has
+no counterpart, because this port does not commit on delivery; telling a
+never-started delivery from an aborted one is already handled by
+`delivery_recovery_required`; archive reproducibility was already correct.
+
+These twenty-one commits since `d5aa25b…` invalidate the certification evidence
+recorded against earlier revisions. That is recorded at the top of
+`documentation/CERTIFICATION_V1.0.1.md` and must be cleared before any seal.
 
 The existence of v1.0.0, a green unit suite, or a corrected plan does not change
 this release from `BLOCKED`.
